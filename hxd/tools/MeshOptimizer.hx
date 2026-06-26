@@ -23,7 +23,7 @@ class MeshOptimizer {
 	remapOut must contain enough space for the resulting remap table (vertexCount elements)
 	indices can be null if the input is unindexed
 	**/
-	@:hlNative("heaps", "generate_vertex_remap")
+	@:hlNative("?heaps", "generate_vertex_remap")
 	public static function generateVertexRemap(remapOut:hl.Bytes, indices:hl.Bytes, indexCount:Int, vertices:hl.Bytes, vertexCount:Int, vertexSize:Int) : Int {
 		return 0;
 	}
@@ -34,7 +34,7 @@ class MeshOptimizer {
 	indicesOut must contain enough space for the resulting index buffer (indexCount elements)
 	indicesIn can be null if the input is unindexed
 	**/
-	@:hlNative("heaps", "remap_index_buffer")
+	@:hlNative("?heaps", "remap_index_buffer")
 	public static function remapIndexBuffer(indicesOut:hl.Bytes, indicesIn:hl.Bytes, indexCount:Int, remap:hl.Bytes) {}
 
 	/**
@@ -43,7 +43,7 @@ class MeshOptimizer {
 	vertexOut must contain enough space for the resulting vertex buffer (vertexCount elements, returned by generateVertexRemap)
 	vertexCount should be the initial vertex count and not the value returned by generateVertexRemap
 	**/
-	@:hlNative("heaps", "remap_vertex_buffer")
+	@:hlNative("?heaps", "remap_vertex_buffer")
 	public static function remapVertexBuffer(verticesOut:hl.Bytes, verticesIn:hl.Bytes, vertexCount:Int, vertexSize:Int, remap:hl.Bytes) {}
 
 	/**
@@ -61,7 +61,7 @@ class MeshOptimizer {
 	options must be a bitmask composed of meshopt_SimplifyX options; 0 is a safe default
 	resultErrorOut can be null; when it's not null, it will contain the resulting (relative) error after simplification
 	**/
-	@:hlNative("heaps", "simplify")
+	@:hlNative("?heaps", "simplify")
 	public static function simplify(indicesOut:hl.Bytes, indicesIn:hl.Bytes, indexCount:Int, vertices:hl.Bytes, vertexCount:Int, vertexSize:Int, targetIndexCount:Int, targetError:Single, options:Int, resultErrorOut:hl.Bytes) : Int {
 		return 0;
 	}
@@ -73,7 +73,7 @@ class MeshOptimizer {
 
 	indicesOut must contain enough space for the resulting index buffer (indexCount elements)
 	**/
-	@:hlNative("heaps", "optimize_vertex_cache")
+	@:hlNative("?heaps", "optimize_vertex_cache")
 	public static function optimizeVertexCache(indicesOut:hl.Bytes, indicesIn:hl.Bytes, indexCount:Int, vertexCount:Int) {}
 
 	/**
@@ -86,7 +86,7 @@ class MeshOptimizer {
 	vertices should have float3 position in the first 12 bytes of each vertex
 	threshold indicates how much the overdraw optimizer can degrade vertex cache efficiency (1.05 = up to 5%) to reduce overdraw more efficiently
 	**/
-	@:hlNative("heaps", "optimize_overdraw")
+	@:hlNative("?heaps", "optimize_overdraw")
 	public static function optimizeOverdraw(indicesOut:hl.Bytes, indicesIn:hl.Bytes, indexCount:Int, vertices:hl.Bytes, vertexCount:Int, vertexSize:Int, threshold:Single) {}
 
 	/**
@@ -97,7 +97,7 @@ class MeshOptimizer {
 	verticesOut must contain enough space for the resulting vertex buffer (vertexCount elements)
 	indices is used both as an input and as an output index buffer
 	**/
-	@:hlNative("heaps", "optimize_vertex_fetch")
+	@:hlNative("?heaps", "optimize_vertex_fetch")
 	public static function optimizeVertexFetch(verticesOut:hl.Bytes, indices:hl.Bytes, indexCount:Int, verticesIn:hl.Bytes, vertexCount:Int, vertexSize:Int) : Int {
 		return 0;
 	}
