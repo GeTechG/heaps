@@ -264,7 +264,12 @@ class Library {
 				}
 				buf.indexes[i] = rid - 1;
 			}
-			#if neko
+			// `FloatBuffer.getNative()` is an `Array` on every non-js target, but `haxe.ds.Vector` is
+			// only backed by `Array` on the std's `#else` branch — flash10, neko, java, lua and eval
+			// each map `VectorData` to a distinct native type, so `fromData` does not typecheck
+			// there. Of those, `neko` and `eval` are the ones this codebase still targets; extend
+			// the list if flash/java/lua support returns. Elsewhere keep the zero-copy `fromData`.
+			#if (neko || eval)
 			buf.vertexes = haxe.ds.Vector.fromArrayCopy(vertexes.getNative());
 			#else
 			buf.vertexes = haxe.ds.Vector.fromData(vertexes.getNative());
