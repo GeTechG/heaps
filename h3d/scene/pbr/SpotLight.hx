@@ -33,20 +33,26 @@ class SpotLight extends Light {
 	}
 
 	function get_range() {
-		return scaleX;
+		return scaleX * getParentScale();
 	}
 
 	function set_range(v:Float) {
 		scaleX = v;
 		lightProj.zFar = v;
+		updateConeScale();
 		return v;
 	}
 
 	function set_angle(v:Float) {
-		scaleY = hxd.Math.tan(hxd.Math.degToRad(v/2.0)) * range;
-		scaleZ = scaleY;
+		angle = v;
+		updateConeScale();
 		lightProj.fovY = v;
-		return angle = v;
+		return v;
+	}
+
+	function updateConeScale() {
+		scaleY = hxd.Math.tan(hxd.Math.degToRad(angle/2.0)) * scaleX;
+		scaleZ = scaleY;
 	}
 
 	public static function spotLightPrim() : h3d.prim.Polygon {
@@ -107,8 +113,7 @@ class SpotLight extends Light {
 		super.sync(ctx);
 
 		pbr.lightColor.load(_color);
-		var power = power;
-		pbr.lightColor.scale(power * power);
+		pbr.lightColor.scale(getIntensity());
 		pbr.lightPos.set(absPos.tx, absPos.ty, absPos.tz);
 		pbr.spotDir.load(absPos.front());
 		pbr.angle = hxd.Math.cos(hxd.Math.degToRad(angle/2.0));

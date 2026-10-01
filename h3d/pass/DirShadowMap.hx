@@ -6,6 +6,7 @@ class DirShadowMap extends Shadows {
 	var dshader : h3d.shader.DirShadow;
 	var mergePass = new h3d.pass.ScreenFx(new h3d.shader.MinMaxShader());
 	var boundingObject : h3d.scene.Object;
+	var cullZMin : Float;
 
 	/**
 		Shrink the frustum of the light to the bounds containing all visible objects
@@ -25,6 +26,7 @@ class DirShadowMap extends Shadows {
 	public var minDist = -1.0;
 
 	public function new( light : h3d.scene.Light ) {
+		if( format == null ) format = R32F;
 		super(light);
 		lightCamera = new h3d.Camera();
 		lightCamera.orthoBounds = new h3d.col.Bounds();
@@ -48,6 +50,10 @@ class DirShadowMap extends Shadows {
 
 	public override function getShadowTex() {
 		return dshader.shadowMap;
+	}
+
+	inline function useDepthClamp() {
+		return ctx.engine.driver.hasFeature(DepthClamp);
 	}
 
 	public dynamic function calcShadowBounds( camera : h3d.Camera ) {
@@ -144,6 +150,7 @@ class DirShadowMap extends Shadows {
 			addCorners(true);
 			addCorners(false);
 
+			var cameraZMin = cameraBounds.zMin;
 			if( autoShrink ) {
 				// Keep the zMin from the bounds of visible objects
 				// Prevent shadows inside frustum from objects outside frustum being clipped
@@ -168,29 +175,31 @@ class DirShadowMap extends Shadows {
 						}
 					bounds.zMin += dMin;
 				}
-			}
-			else
+			} else {
 				bounds.load( cameraBounds );
+				if( useDepthClamp() )
+					cullZMin = bounds.zMin - maxDist;
+			}
+			if( useDepthClamp() && bounds.zMin < cameraZMin ) {
+				cullZMin = bounds.zMin;
+				bounds.zMin = cameraZMin;
+			}
 		}
 		bounds.scaleCenter(1.01);
 	}
 
 	override function syncShader(texture) {
 		dshader.shadowMap = texture;
-		dshader.shadowMapChannel = format == h3d.mat.Texture.nativeFormat ? PackedFloat : R;
 		dshader.shadowBias = bias;
 		dshader.shadowPower = power;
 		dshader.shadowViewProj = getShadowViewProj();
+		dshader.SAMPLING_MODE = samplingKind;
 
 		//ESM
-		dshader.USE_ESM = samplingKind == ESM;
 		dshader.shadowPower = power;
 
 		// PCF
-		dshader.USE_PCF = samplingKind == PCF;
-		dshader.shadowRes.set(texture.width,texture.height);
-		dshader.pcfScale = pcfScale;
-		dshader.pcfQuality = pcfQuality;
+		dshader.pcfScale = pcfScale / texture.width;
 	}
 
 	override function saveStaticData() {
@@ -239,7 +248,10 @@ class DirShadowMap extends Shadows {
 		lightCamera.orthoBounds.zMax = buffer.readFloat();
 		lightCamera.update();
 		var len = buffer.readInt32();
-		var pixels = new hxd.Pixels(size, size, haxe.zip.Uncompress.run(buffer.read(len)), format);
+		var data = haxe.zip.Uncompress.run(buffer.read(len));
+		if( data.length != hxd.Pixels.calcDataSize(size, size, format) )
+			return false;
+		var pixels = new hxd.Pixels(size, size, data, format);
 		if( staticTexture != null ) staticTexture.dispose();
 		staticTexture = new h3d.mat.Texture(size, size, [Target], format);
 		staticTexture.uploadPixels(pixels);
@@ -264,7 +276,10 @@ class DirShadowMap extends Shadows {
 			ctx.engine.pushTarget(tex);
 			ctx.engine.clear(0xFFFFFF, 1.0);
 		}
+		var clamp = useDepthClamp();
+		if( clamp ) ctx.engine.setDepthClamp(true);
 		super.draw(passes, sort);
+		if( clamp ) ctx.engine.setDepthClamp(false);
 
 		var computingStatic = ctx.computingStatic || updateStatic;
 
@@ -301,8 +316,6 @@ class DirShadowMap extends Shadows {
 		return tex;
 	}
 
-	var g : h3d.scene.Graphics;
-	public var debug : Bool;
 	override function draw( passes, ?sort ) {
 		if( !enabled )
 			return;
@@ -312,6 +325,7 @@ class DirShadowMap extends Shadows {
 
 		var computingStatic = ctx.computingStatic || updateStatic;
 
+		cullZMin = hxd.Math.POSITIVE_INFINITY;
 		if( mode != Mixed || computingStatic ) {
 			var ct = ctx.camera.target;
 			var slight = light == null ? ctx.lightSystem.shadowLight : light;
@@ -333,7 +347,17 @@ class DirShadowMap extends Shadows {
 			lightCamera.update();
 		}
 
+		var zMin = lightCamera.orthoBounds.zMin;
+		var hasCullZMin = cullZMin < zMin;
+		if( hasCullZMin ) {
+			lightCamera.orthoBounds.zMin = cullZMin;
+			lightCamera.update();
+		}
 		cullPasses(passes,function(col) return col.inFrustum(lightCamera.frustum));
+		if( hasCullZMin ) {
+			lightCamera.orthoBounds.zMin = zMin;
+			lightCamera.update();
+		}
 
 		depth = ctx.textures.allocTarget("dirShadowMap", size, size, false, hxd.PixelFormat.Depth32);
 		var texture = depth;
@@ -355,7 +379,8 @@ class DirShadowMap extends Shadows {
 		draw(passes);
 		var texture = dshader.shadowMap;
 		var old = staticTexture;
-		staticTexture = texture.clone();
+		staticTexture = new h3d.mat.Texture(texture.width, texture.height, [Target], format);
+		h3d.pass.Copy.run(texture, staticTexture);
 		staticTexture.name = "StaticDirShadowMap";
 		staticTexture.preventAutoDispose();
 		dshader.shadowMap = staticTexture;
@@ -377,45 +402,4 @@ class DirShadowMap extends Shadows {
 		drawBounds(lightCamera.getInverseViewProj(), 0xffffff);
 	}
 
-	function drawBounds(invViewModel : h3d.Matrix, color : Int) {
-
-		inline function unproject(screenX, screenY, camZ) {
-			var p = new h3d.Vector(screenX, screenY, camZ);
-			p.project(invViewModel);
-			return p;
-		}
-
-		var nearPlaneCorner = [unproject(-1, 1, 0), unproject(1, 1, 0), unproject(1, -1, 0), unproject(-1, -1, 0)];
-		var farPlaneCorner = [unproject(-1, 1, 1), unproject(1, 1, 1), unproject(1, -1, 1), unproject(-1, -1, 1)];
-
-		g.lineStyle(1, color);
-
-		// Near Plane
-		var last = nearPlaneCorner[nearPlaneCorner.length - 1];
-		inline function moveTo(x : Float, y : Float, z : Float) {
-			g.moveTo(x - ctx.scene.x, y - ctx.scene.y, z - ctx.scene.z);
-		}
-		inline function lineTo(x : Float, y : Float, z : Float) {
-			g.lineTo(x - ctx.scene.x, y - ctx.scene.y, z - ctx.scene.z);
-		}
-		moveTo(last.x,last.y,last.z);
-		for( fc in nearPlaneCorner ) {
-			lineTo(fc.x, fc.y, fc.z);
-		}
-
-		// Far Plane
-		var last = farPlaneCorner[farPlaneCorner.length - 1];
-		moveTo(last.x,last.y,last.z);
-		for( fc in farPlaneCorner ) {
-			lineTo(fc.x, fc.y, fc.z);
-		}
-
-		// Connections
-		for( i in 0 ... 4 ) {
-			var np = nearPlaneCorner[i];
-			var fp = farPlaneCorner[i];
-			moveTo(np.x, np.y, np.z);
-			lineTo(fp.x, fp.y, fp.z);
-		}
-	}
 }

@@ -41,7 +41,21 @@ class Light extends h3d.scene.Light {
 		return _color = v;
 	}
 
+	public function getIntensity() : Float {
+		return power * power;
+	}
+
 	public function inFrustum(frustum : h3d.col.Frustum) {
 		return true;
+	}
+
+	function getParentScale() {
+		var minScale = 1.0;
+		var p = parent;
+		while (p != null) {
+			minScale *= hxd.Math.min(p.scaleX, hxd.Math.min(p.scaleY, p.scaleZ));
+			p = p.parent;
+		}
+		return minScale;
 	}
 }

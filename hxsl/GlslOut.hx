@@ -55,6 +55,7 @@ class GlslOut {
 		}
 		set(ToInt, "int");
 		set(ToFloat, "float");
+		set(ToUInt, "uint");
 		set(ToBool, "bool");
 		set(LReflect, "reflect");
 		set(Mat3x4, "_mat3x4");
@@ -496,8 +497,9 @@ class GlslOut {
 			add("clamp(");
 			addValue(e, tabs);
 			add(", 0., 1.)");
-		case TCall( { e : TGlobal(AtomicAdd) }, args):
-			add("atomicAdd(");
+		case TCall( { e : TGlobal(g = AtomicAdd|AtomicAnd|AtomicOr) }, args):
+			add(getFunName(g,args,e.t));
+			add("(");
 			addValue(args[0], tabs);
 			add("[");
 			addValue(args[1], tabs);
