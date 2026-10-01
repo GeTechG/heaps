@@ -792,9 +792,10 @@ class Scene extends Layers implements h3d.IDrawable implements hxd.SceneEvents.I
 		ctx.frame++;
 		ctx.time += ctx.elapsedTime;
 		ctx.globalAlpha = alpha;
-		mark("s2d");
+		mark("s2d sync");
 		ctx.engine.driver.beginEvent("Render 2D");
 		sync(ctx);
+		mark("s2d draw");
 		if( children.length != 0 ) {
 			ctx.begin();
 			#if sceneprof h3d.impl.SceneProf.begin("2d", ctx.frame); #end
@@ -856,7 +857,7 @@ class Scene extends Layers implements h3d.IDrawable implements hxd.SceneEvents.I
 		if( ctx.front2back ) {
 			for ( cam in cameras ) {
 				if ( !cam.visible ) continue;
-				var i = children.length;
+				var i = children.length-1;
 				var l = layerCount;
 				cam.enter(ctx);
 				while ( l-- > 0 ) {

@@ -62,6 +62,7 @@ class TextInput extends Text {
 	public var useSoftwareKeyboard : Bool = true;
 	public static dynamic function showSoftwareKeyboard(target:TextInput) {}
 	public static dynamic function hideSoftwareKeyboard(target:TextInput) {}
+	public dynamic function onSoftwareKeyboardEnd(isSubmit: Bool) {}
 
 	var interactive : h2d.Interactive;
 	var cursorText : String;
@@ -87,10 +88,13 @@ class TextInput extends Text {
 	public function new(font, ?parent) {
 		super(font, parent);
 		trimTrailingSpaces = false;
+		wordBreak = true;
 		interactive = new h2d.Interactive(0, 0);
 		interactive.cursor = TextInput;
 		interactive.onPush = function(e:hxd.Event) {
 			onPush(e);
+			if (!canEdit)
+				return;
 			if( !e.cancel && e.button == 0 ) {
 				if( !interactive.hasFocus() ) {
 					e.kind = EFocus;
@@ -822,11 +826,11 @@ class TextInput extends Text {
 	/**
 		Sets focus on this `TextInput`.
 	**/
-	public function focus() {
+	public function focus( autoSelect=false ) {
 		interactive.focus();
 		if( cursorIndex < 0 ) {
 			cursorIndex = 0;
-			if( text != "" && !multiline ) selectionRange = { start : 0, length : getTextLength() };
+			if( autoSelect && text != "" && !multiline ) selectionRange = { start : 0, length : getTextLength() };
 		}
 	}
 

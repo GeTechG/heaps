@@ -310,6 +310,7 @@ class Engine {
 		haxe.System.beginFrame();
 		#end
 		mem.beginFrame();
+		#if dlss driver.pclSimulationEnd(); #end
 		driver.begin(hxd.Timer.frameCount);
 		if( backgroundColor != null ) clear(backgroundColor, 1, 0);
 		return true;
@@ -358,8 +359,8 @@ class Engine {
 		needFlushTarget = true;
 	}
 
-	public function pushDepth( depthBuffer : h3d.mat.Texture ) {
-		pushTarget(depthBuffer, DepthOnly);
+	public function pushDepth( depthBuffer : h3d.mat.Texture, layer = 0 ) {
+		pushTarget(depthBuffer, layer, 0, DepthOnly);
 	}
 
 	public function popTarget() {
@@ -386,7 +387,7 @@ class Engine {
 			currentTargetTex = null;
 		} else {
 			if ( t.depthBinding == DepthOnly )
-				driver.setDepth(t.t);
+				driver.setDepth(t.t, t.layer);
 			else if( t.textures != null )
 				driver.setRenderTargets(t.textures, t.depthBinding);
 			else

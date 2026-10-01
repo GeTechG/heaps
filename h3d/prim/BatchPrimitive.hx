@@ -23,15 +23,14 @@ class BytesArray {
 		var bStart = pos[bIdx];
 		var bNeeded = bStart + bSize;
 		if ( bNeeded > b.length ) {
-			if ( bNeeded < maxSize || maxSize < 0 ) {
-				var oldB = b;
-				b = bytes[bIdx] = haxe.io.Bytes.alloc( (bNeeded >> 1) * 3 );
-				b.blit(0, oldB, 0, bStart);
-			} else {
-				b = bytes[++bIdx] = haxe.io.Bytes.alloc(bSize);
-				bNeeded = bSize;
-				bStart = 0;
-			}
+			var size = b.length * 2;
+			if ( maxSize > 0 && size > maxSize )
+				size = maxSize;
+			if ( size < bSize )
+				size = bSize;
+			b = bytes[++bIdx] = haxe.io.Bytes.alloc(size);
+			bNeeded = bSize;
+			bStart = 0;
 		}
 		pos[bIdx] = bNeeded;
 		return { b : b, pos : bStart };
@@ -52,6 +51,7 @@ class SubMesh {
 	public var bounds : h3d.col.Bounds;
 	public var lodCount : Int;
 	public var lodConfig : Array<Float>;
+	public var cullingScreenRatio : Float;
 	public function new() {
 	}
 }
@@ -140,52 +140,66 @@ class BatchPrimitive extends MeshPrimitive {
 	}
 
 	function fillPolygon( model : Polygon ) {
+		var levels = [model];
+		var lodConfig = [];  // ratio of the next level
+		var lods = model.lods;
+		if( lods != null ) {
+			for ( l in lods ) {
+				levels.push(l.prim);
+				lodConfig.push(l.screenRatio);
+			}
+		}
+		lodConfig.push(0.0);
 		var subMesh = new SubMesh();
 		subMesh.bounds = model.getBounds();
 		bounds.add(subMesh.bounds);
-		subMesh.lodCount = 1;
-		subMesh.lodConfig = [0.0];
+		subMesh.lodCount = levels.length;
+		subMesh.lodConfig = lodConfig;
 		subMesh.subPartStart = subPartCount;
 
-		var cpuBuf = model.getCPUBuffer();
-		#if hl
-		var vertices = @:privateAccess new haxe.io.Bytes(hl.Bytes.getArray(cpuBuf.getNative()), cpuBuf.length * 4);
-		#else
-		var vertices = haxe.io.Bytes.alloc(cpuBuf.length * 4);
-		for ( i in 0...cpuBuf.length )
-			vertices.setFloat(i<<2, cpuBuf[i]);
-		#end
+		var subPart = new SubPart();
+		subPart.indexStarts = [];
+		subPart.indexCounts = [];
+		for ( model in levels ) {
+			var cpuBuf = model.getCPUBuffer();
+			#if hl
+			var vertices = @:privateAccess new haxe.io.Bytes(hl.Bytes.getArray(cpuBuf.getNative()), cpuBuf.length * 4);
+			#else
+			var vertices = haxe.io.Bytes.alloc(cpuBuf.length * 4);
+			for ( i in 0...cpuBuf.length )
+				vertices.setFloat(i<<2, cpuBuf[i]);
+			#end
 
-		var vByteSize = model.vertexCount() * vertexFormat.strideBytes;
-		if ( vBytes == null )
-			vBytes = new BytesArray(vByteSize, maxByteSize);
-		var vStart = Std.int(vBytes.totalSize / vertexFormat.strideBytes);
-		var vAlloc = vBytes.alloc(vByteSize);
-		var vbuf = vAlloc.b;
-		var vByteStart = vAlloc.pos;
-		vbuf.blit(vByteStart, vertices, 0, vByteSize);
+			var vByteSize = model.vertexCount() * vertexFormat.strideBytes;
+			if ( vBytes == null )
+				vBytes = new BytesArray(vByteSize, maxByteSize);
+			var vStart = Std.int(vBytes.totalSize / vertexFormat.strideBytes);
+			var vAlloc = vBytes.alloc(vByteSize);
+			var vbuf = vAlloc.b;
+			var vByteStart = vAlloc.pos;
+			vbuf.blit(vByteStart, vertices, 0, vByteSize);
 
-		var triIndices = model.idx == null;
-		var iCount = triIndices ? model.triCount() * 3 : model.idx.length;
-		var iByteSize = iCount * 4;
-		if ( iBytes == null )
-			iBytes = new BytesArray(iByteSize, maxByteSize);
-		var iStart = iBytes.totalSize >> 2;
-		var iAlloc = iBytes.alloc(iByteSize);
-		var ibuf = iAlloc.b;
-		var iByteStart = iAlloc.pos;
+			var triIndices = model.idx == null;
+			var iCount = triIndices ? model.triCount() * 3 : model.idx.length;
+			var iByteSize = iCount * 4;
+			if ( iBytes == null )
+				iBytes = new BytesArray(iByteSize, maxByteSize);
+			var iStart = iBytes.totalSize >> 2;
+			var iAlloc = iBytes.alloc(iByteSize);
+			var ibuf = iAlloc.b;
+			var iByteStart = iAlloc.pos;
 
-		if ( triIndices ) {
-			for ( i in 0...iCount )
-				ibuf.setInt32(iByteStart + (i << 2), i + vStart);
-		} else {
-			for ( i in 0...iCount )
-				ibuf.setInt32(iByteStart + (i << 2), model.idx[i] + vStart);
+			if ( triIndices ) {
+				for ( i in 0...iCount )
+					ibuf.setInt32(iByteStart + (i << 2), i + vStart);
+			} else {
+				for ( i in 0...iCount )
+					ibuf.setInt32(iByteStart + (i << 2), model.idx[i] + vStart);
+			}
+			subPart.indexStarts.push(iStart);
+			subPart.indexCounts.push(iCount);
 		}
 
-		var subPart = new SubPart();
-		subPart.indexStarts = [iStart];
-		subPart.indexCounts = [iCount];
 		subMesh.subParts = [subPart];
 		subMeshes.push( subMesh );
 		fillSubMeshInfos( subMesh );
@@ -197,6 +211,7 @@ class BatchPrimitive extends MeshPrimitive {
 		bounds.add(subMesh.bounds);
 		subMesh.lodCount = model.lods.length;
 		subMesh.lodConfig = model.lodConfig;
+		subMesh.cullingScreenRatio = model.cullingScreenRatio;
 		subMesh.subParts = [];
 		subMesh.subPartStart = subPartCount;
 		var dataPosition = model.dataPosition;
@@ -291,11 +306,9 @@ class BatchPrimitive extends MeshPrimitive {
 		if( cpuLodInfos.length < lodNeeded )
 			cpuLodInfos.grow( hxd.Math.imax((cpuLodInfos.length >> 1) * 3, lodNeeded) );
 
-		var lodConfigHasCulling = lodConfig.length > lodCount - 1 && lodCount > 1;
-		var minScreenRatioCulling = lodConfigHasCulling ? lodConfig[lodConfig.length - 1] : 0.0;
 		for ( lodIndex in 0...lodCount )
 			cpuLodInfos[lodStart + lodIndex] = lodIndex < lodConfig.length ? lodConfig[lodIndex] : 0.0;
-		cpuLodInfos[totalLodCount - 1] = minScreenRatioCulling;
+		cpuLodInfos[totalLodCount - 1] = subMesh.cullingScreenRatio;
 
 		var subParts = subMesh.subParts;
 		var subPartNeeded = (subPartCount + subParts.length * lodCount) * SUBPART_INFOS_FMT.strideBytes;
@@ -321,20 +334,26 @@ class BatchPrimitive extends MeshPrimitive {
 	function fillLogicNormal( model : MeshPrimitive ) @:privateAccess {
 		var poly = Std.downcast(model, Polygon);
 		if ( poly != null ) {
-			var startOffset : Int = logicNormals.length;
-			var vCount = poly.vertexCount();
-			logicNormals.grow(vCount*3);
-			var k = 0;
-			var hasNormal = poly.normals == null;
-			if ( !hasNormal )
-				poly.addNormals();
-			for( n in poly.normals ) {
-				logicNormals[startOffset + k++] = n.x;
-				logicNormals[startOffset + k++] = n.y;
-				logicNormals[startOffset + k++] = n.z;
+			var levels = [poly];
+			var lods = poly.lods;
+			if( lods != null )
+				for ( l in lods ) levels.push(l.prim);
+			for ( poly in levels ) {
+				var startOffset : Int = logicNormals.length;
+				var vCount = poly.vertexCount();
+				logicNormals.grow(vCount*3);
+				var k = 0;
+				var hasNormal = poly.normals == null;
+				if ( !hasNormal )
+					poly.addNormals();
+				for( n in poly.normals ) {
+					logicNormals[startOffset + k++] = n.x;
+					logicNormals[startOffset + k++] = n.y;
+					logicNormals[startOffset + k++] = n.z;
+				}
+				if ( !hasNormal )
+					poly.normals = null;
 			}
-			if ( !hasNormal )
-				poly.normals = null;
 			return;
 		}
 

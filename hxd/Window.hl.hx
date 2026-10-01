@@ -47,6 +47,8 @@ class Window {
 	var dropFiles : Array<hxd.DropFileEvent.DroppedFile>;
 
 	public var id : Int;
+	public var x(get, never) : Int;
+	public var y(get, never) : Int;
 	public var width(get, never) : Int;
 	public var height(get, never) : Int;
 	public var mouseX(get, never) : Int;
@@ -67,6 +69,11 @@ class Window {
 	public var framerate : Null<Int> = null;
 	public var vsync(get, set) : Bool;
 	public var isFocused(get, never) : Bool;
+
+	/**
+		Get the preferred scaling ratio for high dpi displays for this window
+	**/
+	public var displayScale(get, never) : Float;
 
 	public var title(get, set) : String;
 	public var displayMode(get, set) : DisplayMode;
@@ -99,7 +106,7 @@ class Window {
 	#end
 	#end
 
-	public function new(title:String, width:Int, height:Int, ?flags: { ?fixed:Bool, ?hidden:Bool }) {
+	public function new(title:String, width:Int, height:Int, ?flags: { ?fixed:Bool, ?hidden:Bool, ?background:Bool }) {
 		this.windowWidth = width;
 		this.windowHeight = height;
 		eventTargets = new List();
@@ -122,6 +129,7 @@ class Window {
 		var dxFlags = 0;
 		if (!fixed) dxFlags |= dx.Window.RESIZABLE;
 		if (hidden) dxFlags |= dx.Window.HIDDEN;
+		if (flags != null && flags.background) dxFlags |= dx.Window.NO_ACTIVATE;
 		window = new dx.Window(title, width, height, dx.Window.CW_USEDEFAULT, dx.Window.CW_USEDEFAULT, dxFlags);
 		#end
 		WINDOWS.push(this);
@@ -203,6 +211,12 @@ class Window {
 		for( f in resizeEvents ) f();
 	}
 
+	public function setPosition(x: Int, y: Int) {
+		#if (hldx || hlsdl)
+		window.setPosition(x, y);
+		#end
+	}
+
 	public function addDragAndDropTarget( f : ( event : DropFileEvent ) -> Void ) : Void {
 		if (dropTargets.length == 0) {
 			#if (hlsdl >= version("1.14.0"))
@@ -252,6 +266,22 @@ class Window {
 	public function setFullScreen( v : Bool ) : Void {
 		#if (hldx || hlsdl)
 		window.displayMode = v ? Borderless : Windowed;
+		#end
+	}
+
+	function get_x() : Int {
+		#if (hlsdl || hldx)
+		return window.x;
+		#else
+		return 0;
+		#end
+	}
+
+	function get_y() : Int {
+		#if (hlsdl || hldx)
+		return window.y;
+		#else
+		return 0;
 		#end
 	}
 
@@ -783,6 +813,24 @@ class Window {
 		return [for(m in #if hldx dx.Window.getMonitors() #elseif hlsdl sdl.Sdl.getDisplays() #else [] #end) { name: m.name, width: m.right-m.left, height: m.bottom-m.top}];
 	}
 
+	public function setMaximized(maximized: Bool) : Void {
+		#if (hldx >= version("1.17.0"))
+		window.setZoomed(maximized);
+		#elseif (hlsdl >= version("1.17.0"))
+		window.setMaximized(maximized);
+		#end
+	}
+
+	public function isMaximized() : Bool {
+		#if (hldx >= version("1.17.0"))
+		return window.isZoomed();
+		#elseif (hlsdl >= version("1.17.0"))
+		return window.isMaximized();
+		#else
+		return false;
+		#end
+	}
+
 	// If registry is set, return the default DisplaySetting when it's currently modified by the application.
 	public function getCurrentDisplaySetting(?monitorId : Int, registry : Bool = false) : DisplaySetting {
 		#if hldx
@@ -913,6 +961,14 @@ class Window {
 		return true;
 		#else
 		return inst.onEvent(e);
+		#end
+	}
+
+	function get_displayScale() {
+		#if (hlsdl >= version("1.16.0") || hldx >= version("1.16.0"))
+		return window.displayScale;
+		#else
+		return 1.0;
 		#end
 	}
 

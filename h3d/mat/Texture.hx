@@ -186,7 +186,7 @@ class Texture {
 		else
 		#end
 			h3d.pass.Copy.run(this, t);
-		lastFrame = old;
+		@:bypassAccessor lastFrame = old;
 		return t;
 	}
 
@@ -390,10 +390,11 @@ class Texture {
 		Beware, this is a very slow operation that shouldn't be done during rendering.
 	**/
 	public function capturePixels( face = 0, mipLevel = 0, ?region:h2d.col.IBounds ) : hxd.Pixels {
+		checkAlloc();
 		var old = lastFrame;
 		preventAutoDispose();
 		var pix = mem.driver.capturePixels(this, face, mipLevel, region);
-		lastFrame = old;
+		@:bypassAccessor lastFrame = old;
 		return pix;
 	}
 

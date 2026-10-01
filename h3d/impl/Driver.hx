@@ -89,6 +89,22 @@ enum Feature {
 		Supports DLSS
 	*/
 	DLSS;
+	/*
+		Can render into a single layer of a depth texture array.
+	*/
+	DepthTextureArray;
+	/*
+		Supports compute shaders and read/write storage buffers.
+	*/
+	ComputeShaders;
+	/*
+		Sampler arrays can be indexed by a non-constant, dynamically uniform expression.
+	*/
+	DynamicSamplerIndex;
+	/*
+		Supports depth clamping instead of clipping against the near and far planes.
+	*/
+	DepthClamp;
 }
 
 enum QueryKind {
@@ -118,6 +134,9 @@ enum DLSSTag {
 	MotionVectors;
 	ColorIn;
 	ColorOut;
+	HUDLess;
+	UIColorAndAlpha;
+	UIAlpha;
 }
 
 @:struct class DLSSParams {
@@ -173,6 +192,30 @@ enum DLSSMode {
 	Dlaa;
 }
 
+enum DLSSGMode {
+	Off;
+	On;
+	Auto;
+	Dynamic;
+}
+
+class DLSSGSettings {
+	public var status : Int;
+	public var minWidthOrHeight : Int;
+	public var framesPresented : Int;
+	public var maxFramesToGenerate : Int;
+	public var dynamicSupported : Bool;
+	public var vsyncSupported : Bool;
+	public function new() {
+	}
+}
+
+enum ReflexMode {
+	Off;
+	LowLatency;
+	LowLatencyWithBoost;
+}
+
 class Driver {
 
 	static var SHADER_CACHE : h3d.impl.ShaderCache;
@@ -218,6 +261,9 @@ class Driver {
 
 	public function getNativeShaderCode( shader : hxsl.RuntimeShader ) : String {
 		return null;
+	}
+
+	public function warmupShader( shader : hxsl.RuntimeShader ) {
 	}
 
 	function logImpl( str : String ) {
@@ -289,7 +335,9 @@ class Driver {
 	public function setRenderTargets( textures : Array<h3d.mat.Texture>, depthBinding : h3d.Engine.DepthBinding = ReadWrite ) {
 	}
 
-	public function setDepth( tex : Null<h3d.mat.Texture> ) {
+	public function setDepth( tex : Null<h3d.mat.Texture>, layer = 0 ) {
+		if( layer != 0 )
+			throw "Not implemented";
 	}
 
 	public function setDepthClamp( enabled : Bool ) {
@@ -432,5 +480,61 @@ class Driver {
 	}
 
 	public function applyDLSS( resources : Map<DLSSTag, h3d.mat.Texture>, constants : DLSSParams, quality : DLSSQuality, mode : DLSSMode ) {
+	}
+
+	public function tagDLSSResources( resources : Map<DLSSTag, h3d.mat.Texture> ) {
+	}
+
+	public function clearDLSSTags() {
+	}
+
+	public function setDLSSConstants( constants : DLSSParams ) {
+	}
+
+	public function setDLSSGMode( mode : DLSSGMode, numFramesToGenerate : Int = 1, releaseResources = false ) : Bool {
+		return false;
+	}
+
+	public function getDLSSGMode() : DLSSGMode {
+		return Off;
+	}
+
+	public function getDLSSGSettings() : DLSSGSettings {
+		return null;
+	}
+
+	public function pclSimulationStart() {
+	}
+
+	public function pclSimulationEnd() {
+	}
+
+	public function pclTriggerFlash() {
+	}
+
+	public function reflexSleep() {
+	}
+
+	public function setReflexOptions( mode : ReflexMode, frameLimitUs : Int = 0 ) {
+		return false;
+	}
+
+	public function reflexLowLatencyAvailable() {
+		return false;
+	}
+
+	public function reflexFlashIndicatorDriverControlled() {
+		return false;
+	}
+
+	public function debugReflex() : String {
+		return "";
+	}
+
+	public function debugDLSSG() : String {
+		return "";
+	}
+
+	public function shutdownDLSS() {
 	}
 }

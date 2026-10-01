@@ -344,6 +344,12 @@ enum TGlobal {
 	TexelLod;
 	ResolveSampler;
 	ResolveBuffer;
+	FindLSB;
+	FindMSB;
+	AtomicAnd;
+	AtomicOr;
+	BitCount;
+	ToUInt;
 }
 
 enum SyntaxArgAccess {
@@ -485,6 +491,14 @@ class Tools {
 		return false;
 	}
 
+	public static function isFinalConst( v : TVar ) {
+		return v.kind.match(Local) && v.type.match(TInt | TFloat | TBool) && hasQualifier(v, Final);
+	}
+
+	public static function isFinalInt( v : TVar ) {
+		return isFinalConst(v) && v.type.match(TInt);
+	}
+
 	public static function isStruct( v : TVar ) {
 		return switch( v.type ) { case TStruct(_): true; default: false; }
 	}
@@ -587,7 +601,7 @@ class Tools {
 			return true;
 		case TCall(e, pl):
 			switch( e.e ) {
-			case TGlobal( ImageStore | AtomicAdd | GroupMemoryBarrier | ResolveSampler | ResolveBuffer ):
+			case TGlobal( ImageStore | AtomicAdd | AtomicAnd | AtomicOr | GroupMemoryBarrier | ResolveSampler | ResolveBuffer ):
 				return true;
 			case TGlobal(g):
 			default:

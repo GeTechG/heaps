@@ -29,6 +29,7 @@ class RenderContext extends h3d.impl.RenderContext {
 	public var pbrLightPass : h3d.mat.Pass;
 	public var computingStatic : Bool;
 	public var computeVelocity : Bool;
+	public var enableTranslucency : Bool;
 	public var useReverseDepth : Bool;
 	public var renderResolutionWidth : Int;
 	public var renderResolutionHeight : Int;
@@ -48,8 +49,10 @@ class RenderContext extends h3d.impl.RenderContext {
 	public var currentView : View = new h3d.scene.View(0);
 
 	public var prevCamera : h3d.Camera;
+	public var prevWorldDelta : h3d.Vector;
 
 	@global("camera.view") var cameraView : h3d.Matrix;
+	@global("camera.invView") var cameraInvView : h3d.Matrix;
 	@global("camera.zNear") var cameraNear : Float;
 	@global("camera.zFar") var cameraFar : Float;
 	@global("camera.proj") var cameraProj : h3d.Matrix;
@@ -95,6 +98,7 @@ class RenderContext extends h3d.impl.RenderContext {
 		renderResolutionHeight = engine.height;
 		cachedShaderList = [];
 		cachedPassObjects = [];
+		passes = [];
 		initGlobals();
 	}
 
@@ -104,6 +108,7 @@ class RenderContext extends h3d.impl.RenderContext {
 		cameraReverseDepth = camera.reverseDepth = useReverseDepth;
 		camera.update();
 		cameraView = camera.mcam;
+		cameraInvView = camera.getInverseView();
 		cameraNear = camera.zNear;
 		cameraFar = camera.zFar;
 		cameraProj = camera.mproj;
@@ -162,7 +167,7 @@ class RenderContext extends h3d.impl.RenderContext {
 
 	public function start() {
 		drawPass = null;
-		passes = [];
+		passes.resize(0);
 		lights = null;
 		cachedPos = 0;
 		visibleFlag = true;
@@ -342,7 +347,7 @@ class RenderContext extends h3d.impl.RenderContext {
 			c.s = null;
 			c.next = null;
 		}
-		passes = [];
+		passes.resize(0);
 		lights = null;
 
 		cameraFrustumUploaded = false;
@@ -352,6 +357,7 @@ class RenderContext extends h3d.impl.RenderContext {
 		cameraPrevProj.load(cameraProj);
 		cameraPreviousViewProj.load(cameraViewProj);
 		computeVelocity = false;
+		prevWorldDelta = null;
 
 		clearCurrent();
 	}
