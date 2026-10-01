@@ -372,7 +372,8 @@ class Text extends Drawable {
 		var i = -1;
 		var maxLen = text.length;
 		while( ++i < maxLen ) {
-			var cc = StringTools.fastCodeAt(text, i);
+			var cc = scalarAt(text, i);
+			if( cc > 0xFFFF ) i++; // i is the last code unit of the char, keeps breaks off the middle of a surrogate pair
 			if( cc == '\n'.code ) {
 				flushLine(i);
 				lastPos++;
@@ -422,6 +423,18 @@ class Text extends Drawable {
 		return text.substr(0, Std.int(progress));
 	}
 
+	/**
+		Returns the Unicode scalar starting at code unit `i`: a UTF-16 surrogate pair is combined into one value (> 0xFFFF), a lone half is returned as is.
+	**/
+	@:allow(h2d.HtmlText) static function scalarAt( s : String, i : Int ) : Int {
+		var c = StringTools.fastCodeAt(s, i);
+		if( c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length ) {
+			var lo = StringTools.fastCodeAt(s, i + 1);
+			if( lo >= 0xDC00 && lo <= 0xDFFF ) return 0x10000 + ((c - 0xD800) << 10) + (lo - 0xDC00);
+		}
+		return c;
+	}
+
 	function initGlyphs( text : String, rebuild = true ) : Void {
 		if( rebuild ) glyphs.clear();
 		var x = 0., y = 0., xMax = 0., xMin = 0., yMin = 0., yMax = 0., prevChar = -1, linei = 0;
@@ -451,8 +464,9 @@ class Text extends Drawable {
 		var colorsPos = 0;
 		if( colors != null && colors.length == 0 ) colors = null;
 		if( rebuild ) glyphs.setDefaultColor(0xFFFFFF);
-		for( i in 0...t.length ) {
-			var cc = StringTools.fastCodeAt(t, i);
+		var i = -1;
+		while( ++i < t.length ) {
+			var cc = scalarAt(t, i);
 			var e = font.getChar(cc);
 			var offs = e.getKerningOffset(prevChar);
 			var esize = e.width + offs;
