@@ -475,8 +475,10 @@ class HtmlText extends Text {
 			var textSplit = [], restPos = 0;
 			var x = leftMargin;
 			var breakChars = 0;
-			for ( i in 0...text.length ) {
-				var cc = StringTools.fastCodeAt(text, i);
+			var i = -1;
+			while ( ++i < text.length ) {
+				var cc = Text.scalarAt(text, i);
+				if ( cc > 0xFFFF ) i++;
 				var g = font.getChar(cc);
 				var newline = cc == '\n'.code;
 				var esize = g.width + g.getKerningOffset(prevChar);
@@ -492,7 +494,8 @@ class HtmlText extends Text {
 					var k = i + 1, max = text.length;
 					var prevChar = cc;
 					while ( size <= maxWidth && k < max ) {
-						var cc = StringTools.fastCodeAt(text, k++);
+						var cc = Text.scalarAt(text, k);
+						k += cc > 0xFFFF ? 2 : 1;
 						if ( (font.charset.isSpace(cc) || cc == '\n'.code ) ) break;
 						var e = font.getChar(cc);
 						size += e.width + letterSpacing + e.getKerningOffset(prevChar);
@@ -848,8 +851,10 @@ class HtmlText extends Text {
 			newLine = false;
 			var t = e.nodeValue;
 			var dy = metrics[sizePos].baseLine - font.baseLine;
-			for( i in 0...t.length ) {
-				var cc = StringTools.fastCodeAt(t, i);
+			var i = -1;
+			while( ++i < t.length ) {
+				var cc = Text.scalarAt(t, i);
+				if( cc > 0xFFFF ) i++;
 				if( cc == "\n".code ) {
 					makeLineBreak();
 					dy = metrics[sizePos].baseLine - font.baseLine;
@@ -945,4 +950,4 @@ private typedef SplitNode = {
 	var baseLine : Float;
 	var baseLineOffset : Float;
 	var font : h2d.Font;
-}
+}
