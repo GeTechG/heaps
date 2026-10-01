@@ -201,7 +201,7 @@ class System {
 	static function set_allowTimeout(b) return false;
 
 	static function __init__() : Void {
-		haxe.MainLoop.add(updateCursor, -1);
+		haxe.MainLoop.add(updateCursor, -1).isBlocking = false;
 	}
 
 }
