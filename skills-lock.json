@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "baton": {
+      "source": "GeTechG/baton",
+      "sourceType": "github",
+      "skillPath": "skills/baton/SKILL.md",
+      "computedHash": "d7fd115e12f94e5522f0658357bb600b7de499622cbca6efd8023788dc2daf82"
+    }
+  }
+}
