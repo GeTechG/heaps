@@ -1,0 +1,26 @@
+name: Commit kinds
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  commit-kinds:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Self-test of the check
+        run: bash .github/scripts/check-commit-kinds-test.sh
+      - name: Commits do not mix code and infrastructure
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event.before }}" != 0000000000000000000000000000000000000000 ]; then
+            range="${{ github.event.before }}..${{ github.sha }}"
+          else
+            range="${{ github.sha }}^..${{ github.sha }}"
+          fi
+          bash .github/scripts/check-commit-kinds.sh "$range"
