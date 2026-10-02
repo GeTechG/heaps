@@ -1,0 +1,6 @@
+schema: spec-driven
+
+context: |
+  heaps: the Heaps game engine, maintained as an independent fork of HeapsIO/heaps. Its own rules
+  live in AGENTS.md; its own specs live in openspec/specs. Consumers pin it by commit.
+  Every commit is either code or infrastructure, never both (see openspec/specs/commit-kinds).

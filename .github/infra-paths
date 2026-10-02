@@ -1,0 +1,8 @@
+# Infrastructure paths: files that do not exist upstream (HeapsIO/heaps).
+# One path per line; a trailing / matches a directory prefix. Everything else is code.
+# A commit touches code or infrastructure, never both (see AGENTS.md).
+AGENTS.md
+openspec/
+.github/infra-paths
+.github/scripts/
+.github/workflows/ci.yml
