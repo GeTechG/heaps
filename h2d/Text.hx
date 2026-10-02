@@ -403,7 +403,8 @@ class Text extends Drawable {
 						lastBreak = i;
 						lastBreakX = x;
 					}
-				} else if( wordBreak && x > maxWidth && lastPos < i ) {
+				} else if( wordBreak && x > maxWidth && lastPos < (cc > 0xFFFF ? i - 1 : i) ) {
+					if( cc > 0xFFFF ) i--; // back to the first code unit: break before the pair, never inside it
 					x = startX;
 					flushLine(i);
 					i--;
