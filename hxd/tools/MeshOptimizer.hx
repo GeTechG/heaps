@@ -94,7 +94,7 @@ class MeshOptimizer {
 	* options must be a bitmask composed of meshopt_SimplifyX options; 0 is a safe default
 	* resultErrorOut can be null; when it's not null, it will contain the resulting (relative/absolute) error after simplification
 	*/
-	@:hlNative("heaps", "simplifyWithUpdate")
+	@:hlNative("?heaps", "simplifyWithUpdate")
 	public static function simplifyWithUpdate(indicesOut:hl.Bytes, indexCount : Int, vertexPos:hl.Bytes, vertexCount:Int, vertexStride:Int,
 		vertexAttributes:hl.Bytes, attributeStride:Int, attributeWeights:hl.Bytes, attributeCount:Int,
 		vertexLock:hl.Bytes, targetIndexCount:Int, targetError:Single, options:Int, resultErrorOut:hl.Bytes) : Int {
@@ -152,7 +152,7 @@ class MeshOptimizer {
 	* vertexNormals should have unit float3 normal in the first 12 bytes of each vertex
 	* vertexUVs should have float2 texture coordinate in the first 8 bytes of each vertex
 	*/
-	@:hlNative("heaps", "generate_tangents")
+	@:hlNative("?heaps", "generate_tangents")
 	public static function generateTangents(tangentsOut:hl.Bytes, indices:hl.Bytes, indexCount:Int, vertexPos:hl.Bytes, vertexCount:Int, posStride:Int, vertexNormals:hl.Bytes, normalStride:Int, vertexUVs:hl.Bytes, uvStride:Int, options:Int) {}
 	#end
 }
