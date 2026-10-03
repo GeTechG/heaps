@@ -3,9 +3,10 @@
   "skills": {
     "baton": {
       "source": "GeTechG/baton",
+      "ref": "lific",
       "sourceType": "github",
       "skillPath": "skills/baton/SKILL.md",
-      "computedHash": "d7fd115e12f94e5522f0658357bb600b7de499622cbca6efd8023788dc2daf82"
+      "computedHash": "bc056448adf7fa52083b6ec6cfc65ee5f5d641db4c37c2c3877a08c0df3c24b0"
     }
   }
 }
