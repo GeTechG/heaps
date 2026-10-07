@@ -16,3 +16,4 @@ bin
 .serena/
 .haxe
 .haxelib/
+.haxelib.tmp/

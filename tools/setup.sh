@@ -45,12 +45,14 @@ if [ ! -x "$HAXE_DIR/haxe" ]; then
   mv -T "$TMP/install" "$HAXE_DIR"
   rm -rf "$TMP"
 fi
-ln -sfn "$HAXE_DIR" "$ROOT/.haxe"
 
 # --- libraries: name, GitHub repository, commit, directory inside it -------------------------------------
-rm -rf "$ROOT/.haxelib"
-mkdir -p "$ROOT/.haxelib/heaps"
-echo "$ROOT" > "$ROOT/.haxelib/heaps/.dev"
+# The mapping is built aside and swapped in with `.haxe` only once everything is fetched and built, so a
+# failed run leaves the checkout as it was.
+NEW="$ROOT/.haxelib.tmp"
+rm -rf "$NEW"
+mkdir -p "$NEW/heaps"
+echo "$ROOT" > "$NEW/heaps/.dev"
 while read -r NAME REPO COMMIT SUB; do
   DIR="$CACHE/lib/${REPO#*/}/$COMMIT"
   if [ ! -d "$DIR" ]; then
@@ -63,8 +65,8 @@ while read -r NAME REPO COMMIT SUB; do
     mv -T "$TMP" "$DIR"
   fi
   [ -f "$DIR/$SUB/haxelib.json" ] || die "no library at $DIR/$SUB"
-  mkdir -p "$ROOT/.haxelib/$NAME"
-  (cd "$DIR/$SUB" && pwd) > "$ROOT/.haxelib/$NAME/.dev"
+  mkdir -p "$NEW/$NAME"
+  (cd "$DIR/$SUB" && pwd) > "$NEW/$NAME/.dev"
 done <<'EOF'
 format   HaxeFoundation/format   775a06f0a7aa64cbd060b5c3ba62f65d7fed684a .
 hxbit    ncannasse/hxbit         50f852cf499bdbdc5f77b0c9a8d01115a1655455 .
@@ -91,6 +93,10 @@ if [ ! -f "$LS_DIR/bin/server.js" ]; then
   mv -T "$TMP" "$LS_DIR"
 fi
 flock -u 9
+
+ln -sfn "$HAXE_DIR" "$ROOT/.haxe"
+rm -rf "$ROOT/.haxelib"
+mv -T "$NEW" "$ROOT/.haxelib"
 
 # --- display config -------------------------------------------------------------------------------------
 # The server sends these arguments to the compiler over a socket, so: no -lib (flattened to -cp/-D here)
