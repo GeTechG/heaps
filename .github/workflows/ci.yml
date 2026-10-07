@@ -1,9 +1,10 @@
-name: Commit kinds
+name: Checks
 
 on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   commit-kinds:
@@ -16,7 +17,9 @@ jobs:
         run: bash .github/scripts/check-commit-kinds-test.sh
       - name: Commits do not mix code and infrastructure
         run: |
-          if [ "${{ github.event_name }}" = pull_request ]; then
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            range="origin/master..${{ github.sha }}"
+          elif [ "${{ github.event_name }}" = pull_request ]; then
             range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
           elif [ "${{ github.event.before }}" != 0000000000000000000000000000000000000000 ]; then
             range="${{ github.event.before }}..${{ github.sha }}"
@@ -24,3 +27,17 @@ jobs:
             range="${{ github.sha }}^..${{ github.sha }}"
           fi
           bash .github/scripts/check-commit-kinds.sh "$range"
+
+  pinned-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Toolchain cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/haxe-toolchain
+          key: haxe-toolchain-${{ hashFiles('tools/setup.sh', 'tools/haxe-build.pin') }}
+      - name: Provision the pinned compiler
+        run: bash tools/setup.sh
+      - name: Build all.hxml
+        run: PATH="$PWD/tools:$PATH" HAXE_STD_PATH=.haxe/std .haxe/haxe all.hxml
