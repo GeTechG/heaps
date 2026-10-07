@@ -2,9 +2,7 @@ name: Checks
 
 on:
   push:
-    branches: [master]
   pull_request:
-  workflow_dispatch:
 
 jobs:
   commit-kinds:
@@ -17,10 +15,10 @@ jobs:
         run: bash .github/scripts/check-commit-kinds-test.sh
       - name: Commits do not mix code and infrastructure
         run: |
-          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
-            range="origin/master..${{ github.sha }}"
-          elif [ "${{ github.event_name }}" = pull_request ]; then
+          if [ "${{ github.event_name }}" = pull_request ]; then
             range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.ref_name }}" != master ]; then
+            range="origin/master..${{ github.sha }}"
           elif [ "${{ github.event.before }}" != 0000000000000000000000000000000000000000 ]; then
             range="${{ github.event.before }}..${{ github.sha }}"
           else
