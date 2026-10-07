@@ -28,7 +28,16 @@ The maintainer decides architecture and end-user behaviour, nothing else — ste
 Run before pushing:
 - `bash .github/scripts/check-commit-kinds-test.sh` — self-test of the commit-kind check.
 - `bash .github/scripts/check-commit-kinds.sh origin/master..HEAD` — the check on your branch.
-- For code commits: `haxe all.hxml` (Haxe 4.3.7; libraries as in `.github/workflows/main.yml`), plus any test under `tests/` touched by the change — the run command is the first line of each test file.
+- For code commits: `haxe all.hxml`, plus any test under `tests/` touched by the change — the run command is the first line of each test file. `haxe` here is always the pinned compiler (see *Toolchain*).
+
+## Toolchain
+`bash tools/setup.sh` provisions a checkout in one command. Run it in every new worktree, after adding, moving or removing source files, and after changing a pin; restart Serena afterwards.
+
+- **Compiler.** A Haxe 5 build of the `GeTechG/haxe` fork, pinned in `tools/haxe-build.pin`: one line, `<build key, 40 hex> <sha256 of the archive, 64 hex>`. Changing the compiler is changing that file, in one commit. The setup downloads the build, verifies the checksum and links it as the git-ignored `.haxe`.
+- **Build, type-check and run tests only with it**, never with a system Haxe 4.x or haxelib. Wherever a command says `haxe`, run `PATH="$PWD/tools:$PATH" HAXE_STD_PATH=.haxe/std .haxe/haxe …`. `tools/haxelib` on that `PATH` is what resolves `-lib`: it serves the libraries pinned by commit in `tools/setup.sh`, and nothing else.
+- **Serena** (symbol navigation, wired in `.mcp.json` and `.codex/config.toml`) runs a language server on that compiler; the setup builds the server and writes the git-ignored `.serena/lsp.hxml` and `.serena/project.local.yml`. The display config is `all.hxml`'s HashLink/SDL build with every module it includes listed by name — which is why the setup is re-run when files are added.
+- **Reference lists from the language server are not exhaustive.** Before renaming or removing a symbol, check them against a text search. Known gaps: code compiled only for another target (JS, DirectX) is not typed; a listed module that stops compiling drops out (the setup fails loudly when `.serena/lsp.hxml` does not compile); and a symbol *declared* in a file with CRLF line endings — most of the sources — returns no references at all.
+- Keep each file's line endings. Serena's editing tools write LF, so edit CRLF files with other tools.
 
 ## Specs
 `openspec/` holds this fork's own specs (`openspec/specs/`). Behaviour or rule changes go through `openspec/changes/`.
