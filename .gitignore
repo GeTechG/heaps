@@ -17,3 +17,4 @@ bin
 .haxe
 .haxelib/
 .haxelib.tmp/
+.ast-grep/

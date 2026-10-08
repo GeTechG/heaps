@@ -1,0 +1,7 @@
+# ast-grep on the Haxe sources: search and rewrite by code shape, e.g.
+#   .ast-grep/ast-grep run -p 'throw new $T($$$A)' -l haxe h2d h3d hxd hxsl
+# The binary and the grammar library are provisioned by tools/setup.sh.
+customLanguages:
+  haxe:
+    libraryPath: .ast-grep/haxe.so
+    extensions: [hx]

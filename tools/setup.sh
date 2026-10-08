@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Provision this checkout's toolchain in one command; re-run it in every new worktree, after adding
-# source files and after changing a pin. Needs curl, sha256sum, tar, flock, git, node and npm.
+# source files and after changing a pin. Needs curl, sha256sum, tar, flock, git, cc, node and npm.
 #
 #   .haxe                      -> the pinned Haxe 5 compiler (tools/haxe-build.pin)
 #   .haxelib/<lib>/.dev        -> the libraries all.hxml names, at the commits pinned below (read by tools/haxelib)
 #   .serena/lsp.hxml           -> display config for the language server: all.hxml's HashLink/SDL build
 #   .serena/project.local.yml  -> points Serena at the pinned haxe-language-server and at .haxe
+#   .ast-grep/{ast-grep,haxe.so} -> the pinned ast-grep and the Haxe grammar sgconfig.yml names
 #
 # Everything downloaded or built is shared by every checkout of this user, one directory per pin, under
-# ${XDG_CACHE_HOME:-~/.cache}/haxe-toolchain/{haxe,lib,language-server}; nothing is ever removed from it.
+# ${XDG_CACHE_HOME:-~/.cache}/haxe-toolchain/{haxe,lib,language-server,ast-grep,tree-sitter-haxe}; nothing is ever removed from it.
 # Compile with:  PATH="$PWD/tools:$PATH" HAXE_STD_PATH=.haxe/std .haxe/haxe all.hxml
 set -euo pipefail
 
@@ -26,7 +27,7 @@ fi
 read -r KEY SUM < "$ROOT/tools/haxe-build.pin"
 [[ "$KEY" =~ ^[0-9a-f]{40}$ && "$SUM" =~ ^[0-9a-f]{64}$ ]] || die "tools/haxe-build.pin is not '<build key> <sha256>'"
 HAXE_DIR="$CACHE/haxe/$KEY"
-mkdir -p "$CACHE/haxe" "$CACHE/lib" "$CACHE/language-server"
+mkdir -p "$CACHE/haxe" "$CACHE/lib" "$CACHE/language-server" "$CACHE/ast-grep" "$CACHE/tree-sitter-haxe"
 # One provisioner at a time: a second checkout waits here, then finds the finished installs.
 exec 9> "$CACHE/.lock"
 flock 9
@@ -92,9 +93,42 @@ if [ ! -f "$LS_DIR/bin/server.js" ]; then
   [ -f "$TMP/bin/server.js" ] || die "the language server build produced no bin/server.js"
   mv -T "$TMP" "$LS_DIR"
 fi
+
+# --- ast-grep: structural search of the Haxe sources -----------------------------------------------------
+# The binary is the npm package at an exact version (node and npm are needed for the language server
+# anyway). ast-grep knows no Haxe: sgconfig.yml loads the grammar, GeTechG/tree-sitter-haxe, which
+# commits its generated parser, so the system C compiler is the whole build.
+AG_VERSION=0.45.3
+GRAMMAR_COMMIT=31ae7eb010e18975fd73cd65e14c71ef5054f9c7
+AG_DIR="$CACHE/ast-grep/$AG_VERSION"
+AG_BIN="$AG_DIR/node_modules/.bin/ast-grep"
+GRAMMAR_DIR="$CACHE/tree-sitter-haxe/$GRAMMAR_COMMIT"
+if [ ! -x "$AG_BIN" ]; then
+  TMP="$(mktemp -d "$AG_DIR.tmp.XXXXXX")"
+  trap 'rm -rf "$TMP"' EXIT
+  echo "setup: installing ast-grep $AG_VERSION"
+  npm install --silent --no-save --no-package-lock --prefix "$TMP" "@ast-grep/cli@$AG_VERSION"
+  [ "$("$TMP/node_modules/.bin/ast-grep" --version)" = "ast-grep $AG_VERSION" ] || die "npm left no ast-grep $AG_VERSION"
+  mv -T "$TMP" "$AG_DIR"
+fi
+if [ ! -f "$GRAMMAR_DIR/haxe.so" ]; then
+  TMP="$GRAMMAR_DIR.tmp.$$"
+  trap 'rm -rf "$TMP"' EXIT
+  echo "setup: building tree-sitter-haxe $GRAMMAR_COMMIT"
+  git init -q "$TMP"
+  git -C "$TMP" fetch -q --depth 1 https://github.com/GeTechG/tree-sitter-haxe "$GRAMMAR_COMMIT"
+  git -C "$TMP" checkout -q FETCH_HEAD
+  mkdir "$TMP/out"
+  cc -shared -fPIC -O2 -I "$TMP/src" "$TMP"/src/*.c -o "$TMP/out/haxe.so"
+  mv -T "$TMP/out" "$GRAMMAR_DIR"
+  rm -rf "$TMP"
+fi
 flock -u 9
 
 ln -sfn "$HAXE_DIR" "$ROOT/.haxe"
+mkdir -p "$ROOT/.ast-grep"
+ln -sfn "$AG_BIN" "$ROOT/.ast-grep/ast-grep"
+ln -sfn "$GRAMMAR_DIR/haxe.so" "$ROOT/.ast-grep/haxe.so"
 rm -rf "$ROOT/.haxelib"
 mv -T "$NEW" "$ROOT/.haxelib"
 
@@ -133,6 +167,7 @@ ls_specific_settings:
 YAML
 
 echo "setup: $(.haxe/haxe --version) at .haxe, $(grep -c '^[a-z0-9]' .serena/lsp.hxml) modules in .serena/lsp.hxml"
+echo "setup: $(.ast-grep/ast-grep --version) at .ast-grep, Haxe grammar ${GRAMMAR_COMMIT:0:7}"
 # A module that does not compile leaves reference lists incomplete again.
 HAXE_STD_PATH=.haxe/std .haxe/haxe .serena/lsp.hxml --no-output \
   || die ".serena/lsp.hxml does not compile: language-server reference lists will be incomplete"
