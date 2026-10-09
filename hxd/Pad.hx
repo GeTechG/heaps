@@ -344,14 +344,7 @@ class Pad {
 		#elseif js
 		if( !initDone ) {
 			initDone = true;
-			js.Browser.window.addEventListener("gamepadconnected", function(p) {
-				var pad = new hxd.Pad();
-				pad.d = p.gamepad;
-				pad.config = pickConfig(pad.d.id);
-				pad.index = pad.d.index;
-				pads.set(pad.d.index, pad);
-				waitPad(pad);
-			});
+			js.Browser.window.addEventListener("gamepadconnected", function(p) initPad(p.gamepad));
 			js.Browser.window.addEventListener("gamepaddisconnected", function(p) {
 				var pad = pads.get(p.gamepad.index);
 				if( pad == null ) return;
@@ -362,6 +355,12 @@ class Pad {
 			#if !manual_sync_pad
 			haxe.MainLoop.add(syncPads, -1);
 			#end
+			// gamepads whose gamepadconnected was fired before we started listening
+			var current : Array<js.html.Gamepad> = [];
+			try current = js.Browser.navigator.getGamepads() catch( e : Dynamic ) {};
+			for( d in current )
+				if( d != null && d.connected )
+					initPad(d);
 		}
 		#end
 	}
@@ -516,6 +515,17 @@ class Pad {
 	}
 
 	#elseif js
+
+	static function initPad( d : js.html.Gamepad ) {
+		if( pads.exists(d.index) )
+			return;
+		var pad = new hxd.Pad();
+		pad.d = d;
+		pad.config = pickConfig(d.id);
+		pad.index = d.index;
+		pads.set(d.index, pad);
+		waitPad(pad);
+	}
 
 	static function syncPads() {
 		var freshPads : Array<js.html.Gamepad> = [];
