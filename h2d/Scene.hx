@@ -364,9 +364,10 @@ class Scene extends Layers implements h3d.IDrawable implements hxd.SceneEvents.I
 					viewportX = 1 - (width * viewportA);
 					offsetX = engine.width - width * zoom;
 				default:
-					// Simple `width * viewportA - 0.5` causes gaps between tiles
+					// Simple `width * viewportA - 0.5` causes gaps between tiles: snap the margin to a whole scene pixel,
+					// and keep the pixel offset on that same margin
 					viewportX = Math.floor((engine.width - width * zoom) / (zoom * 2)) * viewportA - 1.;
-					offsetX = Math.floor((engine.width - width * zoom) / 2);
+					offsetX = Math.floor((engine.width - width * zoom) / (zoom * 2)) * zoom;
 			}
 
 			if ( vertical == null ) vertical = Center;
@@ -379,7 +380,7 @@ class Scene extends Layers implements h3d.IDrawable implements hxd.SceneEvents.I
 					offsetY = engine.height - height * zoom;
 				default:
 					viewportY = Math.floor((engine.height - height * zoom) / (zoom * 2)) * viewportD - 1.;
-					offsetY = Math.floor((engine.height - height * zoom) / 2);
+					offsetY = Math.floor((engine.height - height * zoom) / (zoom * 2)) * zoom;
 			}
 		}
 
