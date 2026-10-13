@@ -209,7 +209,8 @@ class GlDriver extends Driver {
 		if( glES == null ) {
 			commonVA = gl.createVertexArray();
 			gl.bindVertexArray( commonVA );
-		}
+		} else
+			hasDepthClamp = false; // not in GLES core, and EXT_depth_clamp cannot be queried here
 		#end
 
 		var reg = ~/[0-9]+\.[0-9]+/;
@@ -240,7 +241,7 @@ class GlDriver extends Driver {
 		// setup shader optim
 		hxsl.SharedShader.UNROLL_LOOPS = !hasFeature(ShaderModel3);
 		#else
-		gl.enable(GL.TEXTURE_CUBE_MAP_SEAMLESS);
+		if( glES == null ) gl.enable(GL.TEXTURE_CUBE_MAP_SEAMLESS); // always seamless in GLES 3
 		gl.finish(); // prevent glError() on first bufferData
 		#end
 		gl.pixelStorei(GL.PACK_ALIGNMENT, 1);
@@ -813,7 +814,7 @@ class GlDriver extends Driver {
 					gl.texParameteri(mode, GL.TEXTURE_WRAP_R, w);
 					gl.texParameteri(mode, GL.TEXTURE_BASE_LEVEL, startingMip > t.residentMip ? startingMip - t.residentMip : 0);
 					#if !js
-					gl.texParameterf(mode, GL.TEXTURE_LOD_BIAS, t.lodBias);
+					if( glES == null ) gl.texParameterf(mode, GL.TEXTURE_LOD_BIAS, t.lodBias); // not in GLES
 					var hasAnisotropicFiltering = true;
 					#end
 					if( hasAnisotropicFiltering ) {
