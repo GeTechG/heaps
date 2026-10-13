@@ -135,6 +135,9 @@ class GlDriver extends Driver {
 	var maxCompressedTexturesSupport = 0;
 	var hasRGTCSupport = false;
 	var hasDepthClamp = #if js false #else true #end;
+	#if !js
+	var hasAnisotropicFiltering = true;
+	#end
 	static inline var DEPTH_CLAMP = #if js 0x864F #else GL.DEPTH_CLAMP #end;
 
 	public static var hasMultiIndirectCount = false;
@@ -209,8 +212,15 @@ class GlDriver extends Driver {
 		if( glES == null ) {
 			commonVA = gl.createVertexArray();
 			gl.bindVertexArray( commonVA );
-		} else
-			hasDepthClamp = false; // not in GLES core, and EXT_depth_clamp cannot be queried here
+		} else {
+			// not in GLES core: queried once here, hasExtension walks the whole extension list
+			#if (hlsdl >= version("1.15.0"))
+			hasDepthClamp = gl.hasExtension("GL_EXT_depth_clamp");
+			hasAnisotropicFiltering = gl.hasExtension("GL_EXT_texture_filter_anisotropic");
+			#else
+			hasDepthClamp = false;
+			#end
+		}
 		#end
 
 		var reg = ~/[0-9]+\.[0-9]+/;
@@ -815,7 +825,6 @@ class GlDriver extends Driver {
 					gl.texParameteri(mode, GL.TEXTURE_BASE_LEVEL, startingMip > t.residentMip ? startingMip - t.residentMip : 0);
 					#if !js
 					if( glES == null ) gl.texParameterf(mode, GL.TEXTURE_LOD_BIAS, t.lodBias); // not in GLES
-					var hasAnisotropicFiltering = true;
 					#end
 					if( hasAnisotropicFiltering ) {
 						var anisotropicLevel = t.filter.match(AnisotropicLinear|AnisotropicNearest) ? t.anisotropicMaxLevel : 1;
