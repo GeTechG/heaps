@@ -30,6 +30,9 @@ class Sound extends Resource {
 	public function getData() : hxd.snd.Data {
 		if( data != null )
 			return data;
+		#if heaps_no_sound_decode
+		throw "Sound has no data " + entry.path;
+		#else
 		var bytes = entry.getBytes();
 		switch( bytes.get(0) ) {
 		case 'R'.code: // RIFF (wav)
@@ -49,6 +52,14 @@ class Sound extends Resource {
 		if ( ENABLE_AUTO_WATCH )
 			watch(watchCallb);
 		return data;
+		#end
+	}
+
+	/**
+		Sets already decoded data, played instead of decoding the resource bytes.
+	**/
+	public function setData( data : hxd.snd.Data ) {
+		this.data = data;
 	}
 
 	public function dispose() {

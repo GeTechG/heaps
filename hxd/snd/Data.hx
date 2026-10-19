@@ -54,12 +54,11 @@ class Data {
 		var out = haxe.io.Bytes.alloc(channels * newSamples * formatBytes(format));
 		resampleBuffer(out, 0, data, 0, rate, format, channels, samples);
 
-		var data = new WavData(null);
+		var data = new RawData(out);
 		data.channels = channels;
 		data.samples = newSamples;
 		data.sampleFormat = format;
 		data.samplingRate = rate;
-		@:privateAccess data.rawData = out;
 		return data;
 	}
 
@@ -181,6 +180,20 @@ class Data {
 
 	function get_duration() {
 		return samples / samplingRate;
+	}
+
+}
+private class RawData extends Data {
+
+	var rawData : haxe.io.Bytes;
+
+	public function new(bytes) {
+		rawData = bytes;
+	}
+
+	override function decodeBuffer(out:haxe.io.Bytes, outPos:Int, sampleStart:Int, sampleCount:Int) {
+		var bpp = getBytesPerSample();
+		out.blit(outPos, rawData, sampleStart * bpp, sampleCount * bpp);
 	}
 
 }
