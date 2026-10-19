@@ -2,6 +2,7 @@ package hxd.snd;
 
 import hxd.snd.Driver;
 import haxe.MainLoop;
+import hxd.snd.effect.Pan;
 
 @:access(hxd.snd.Manager)
 class Source {
@@ -20,6 +21,10 @@ class Source {
 	public var streamBuffer : haxe.io.Bytes;
 	public var streamStart : Int;
 	public var streamPos : Int;
+
+	// mixed by the Manager into stereo buffers (Pan.mix), from panValue on
+	public var panned   = false;
+	public var panValue = 0.;
 
 	public function new(driver : Driver) {
 		id      = ID++;
@@ -67,6 +72,16 @@ class Manager {
 	public static var VIRTUAL_VOLUME_THRESHOLD   = 1e-5;
 
 	/**
+		A channel with a `hxd.snd.effect.Pan` is mixed into stereo buffers of this many samples, this many queued:
+		a change of the pan is heard after them. Not used with WebAudio, which pans natively.
+	**/
+	public static var PAN_BUFFER_SAMPLE_COUNT    = 2048;
+	public static var PAN_BUFFER_QUEUE_LENGTH    = 3;
+	static inline var NATIVE_PAN = #if (js && !useal) true #else false #end;
+	// float keeps the headroom of the pan sum until the source gain applies; elsewhere the mix clips at full scale
+	static inline var PAN_FLOAT  = #if (js || hlopenal) true #else false #end;
+
+	/**
 		Allows to decode big streaming buffers over X split frames. 0 to disable
 	**/
 	public static var BUFFER_STREAM_SPLIT        = 16;
@@ -83,6 +98,7 @@ class Manager {
 
 	var cachedBytes   : haxe.io.Bytes;
 	var resampleBytes : haxe.io.Bytes;
+	var panBytes      : haxe.io.Bytes;
 
 	var driver   : Driver;
 	var channels : Channel;
@@ -365,8 +381,15 @@ class Manager {
 			c.position = s.start / targetRate + playedSamples / s.buffers[0].sampleRate;
 			c.positionChanged = false;
 
+			// was a Pan added or removed? rebind at the synced position, switching between the mixed and the plain buffers
+			if (s.panned != usesPan(c)) {
+				releaseSource(s);
+				continue;
+			}
+
 			// enqueue next buffers
-			if (s.buffers.length < BUFFER_QUEUE_LENGTH) {
+			while (s.buffers.length < (s.panned ? PAN_BUFFER_QUEUE_LENGTH : BUFFER_QUEUE_LENGTH)) {
+				var queued = s.buffers.length;
 				var b = s.buffers[s.buffers.length - 1];
 				if (!b.isEnd) {
 					// next stream buffer
@@ -380,6 +403,8 @@ class Manager {
 					// requeue last played sound
 					queueBuffer(s, b.sound, 0);
 				}
+				// one buffer per update, as many as needed for mixed ones
+				if (!s.panned || s.buffers.length == queued) break;
 			}
 		}
 
@@ -453,6 +478,8 @@ class Manager {
 			if (s == null) throw "could not get a source";
 			s.channel = c;
 			c.source = s;
+			s.panned = usesPan(c);
+			s.panValue = Math.NaN;
 
 			checkTargetFormat(c.sound.getData(), c.soundGroup.mono);
 			s.start = Math.floor(c.position * targetRate);
@@ -598,14 +625,14 @@ class Manager {
 		var sgroup = s.channel.soundGroup;
 
 		var b : Buffer = null;
-		if (data.duration <= STREAM_DURATION) {
+		if (!s.panned && data.duration <= STREAM_DURATION) {
 			// queue sound buffer
 			b = getSoundBuffer(snd, sgroup);
 			driver.queueBuffer(s.handle, b.handle, start, true);
 		} else {
 
 			// wait until fully decoded
-			if( s.buffers.length > 0 && BUFFER_STREAM_SPLIT > 1 && !progressiveDecodeBuffer(s, snd, start) )
+			if( !s.panned && s.buffers.length > 0 && BUFFER_STREAM_SPLIT > 1 && !progressiveDecodeBuffer(s, snd, start) )
 				return false;
 
 			// queue stream buffer
@@ -735,7 +762,7 @@ class Manager {
 			b.isStream = true;
 		}
 
-		var samples = STREAM_BUFFER_SAMPLE_COUNT;
+		var samples = src.panned ? PAN_BUFFER_SAMPLE_COUNT : STREAM_BUFFER_SAMPLE_COUNT;
 		if (start + samples >= data.samples) {
 			samples = data.samples - start;
 			b.isEnd = true;
@@ -749,7 +776,7 @@ class Manager {
 
 		var size  = samples * data.getBytesPerSample();
 		var bytes;
-		if( src.streamSound == snd && src.streamStart == start ) {
+		if( !src.panned && src.streamSound == snd && src.streamStart == start ) {
 			// finish progressive decoding and use progressive buffer
 			while( !progressiveDecodeBuffer(src, snd, start) ) {};
 			bytes = src.streamBuffer;
@@ -765,9 +792,32 @@ class Manager {
 			bytes = resampleBytes;
 		}
 
-		driver.setBufferData(b.handle, bytes, size, targetFormat, targetChannels, targetRate);
+		var channels = targetChannels, format = targetFormat;
+		if (src.panned) {
+			var pan = getPan(src.channel);
+			var frames = Std.int(size / (targetChannels * Data.formatBytes(targetFormat)));
+			format = PAN_FLOAT ? Data.SampleFormat.F32 : targetFormat;
+			size = frames * 2 * Data.formatBytes(format);
+			if (panBytes == null || panBytes.length < size) panBytes = haxe.io.Bytes.alloc(size);
+			Pan.mix(bytes, targetFormat, targetChannels, frames, Math.isNaN(src.panValue) ? pan.value : src.panValue, pan.value, panBytes, format);
+			src.panValue = pan.value;
+			bytes = panBytes;
+			channels = 2;
+		}
+
+		driver.setBufferData(b.handle, bytes, size, format, channels, targetRate);
 		b.sampleRate = targetRate;
 		return b;
+	}
+
+	static function getPan(c : Channel) : Pan {
+		for (e in c.effects) { var p = Std.downcast(e, Pan); if (p != null) return p; }
+		for (e in c.channelGroup.effects) { var p = Std.downcast(e, Pan); if (p != null) return p; }
+		return null;
+	}
+
+	static inline function usesPan(c : Channel) {
+		return !NATIVE_PAN && getPan(c) != null;
 	}
 
 	function sortChannel(a : Channel, b : Channel) {

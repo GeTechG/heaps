@@ -17,6 +17,7 @@ class SourceHandle {
 	public var driver : Driver;
 	public var lowPass : BiquadFilterNode;
 	public var panner : PannerNode;
+	public var stereoPanner : StereoPannerNode;
 	public var gain : GainNode;
 	public var destination : AudioNode;
 	public var buffers : Array<BufferPlayback>;
@@ -33,12 +34,19 @@ class SourceHandle {
 	public function updateDestination() {
 		destination = gain;
 		if ( lowPass != null ) {
+			lowPass.disconnect();
 			lowPass.connect(destination);
 			destination = lowPass;
 		}
 		if ( panner != null ) {
+			panner.disconnect();
 			panner.connect(destination);
 			destination = panner;
+		}
+		if ( stereoPanner != null ) {
+			stereoPanner.disconnect();
+			stereoPanner.connect(destination);
+			destination = stereoPanner;
 		}
 		gain.connect(driver.destination);
 		for (b in buffers) {
