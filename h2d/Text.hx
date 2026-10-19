@@ -455,7 +455,7 @@ class Text extends Drawable {
 			var k = align == Center || align == MultilineCenter ? 0.5 : 1;
 			for( i in 0...lines.length )
 				lines[i] = Math.ffloor((max - lines[i]) * k);
-			x = lines[0];
+			x = lines.length > 0 ? lines[0] : 0; // no line measured (e.g. negative glyph widths): lines[0] is undefined on JS
 			xMin = x;
 		case Left:
 			x = 0;
