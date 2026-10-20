@@ -36,8 +36,11 @@ class OggData extends Data {
 
 	override function decodeBuffer(out:haxe.io.Bytes, outPos:Int, sampleStart:Int, sampleCount:Int) {
 		if( currentSample != sampleStart ) {
+			if( !ogg_seek(reader, sampleStart) ) {
+				currentSample = -1; // unknown position: seek again next time
+				throw "Invalid sample start";
+			}
 			currentSample = sampleStart;
-			if( !ogg_seek(reader, sampleStart) ) throw "Invalid sample start";
 		}
 		var bpp = getBytesPerSample();
 		var output : hl.Bytes = out;
@@ -51,7 +54,10 @@ class OggData extends Data {
 		var bytesNeeded = sampleCount * bpp;
 		while( bytesNeeded > 0 ) {
 			var read = ogg_read(reader, output, bytesNeeded, format);
-			if( read < 0 ) throw "Failed to decode OGG data";
+			if( read < 0 ) {
+				currentSample = -1;
+				throw "Failed to decode OGG data";
+			}
 			if( read == 0 ) {
 				// EOF
 				output.fill(0,bytesNeeded, sampleFormat == UI8 ? 0x80 : 0);
