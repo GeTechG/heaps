@@ -113,18 +113,33 @@ class Manager {
 	var hasMasterVolume   : Bool;
 
 	public var suspended : Bool = false;
+	/**
+		The exception thrown while the sound driver was created, which left the Manager without a driver: every channel then plays virtually. `null` when the driver was created.
+	**/
+	public var driverError(default, null) : haxe.Exception;
+
+	static dynamic function createDriver() : Driver {
+		#if usesys
+		return new haxe.AudioTypes.SoundDriver();
+		#elseif (js && !useal)
+		return new hxd.snd.webaudio.Driver();
+		#else
+		return new hxd.snd.openal.Driver();
+		#end
+	}
 
 	private function new() {
 		try {
-			#if usesys
-			driver = new haxe.AudioTypes.SoundDriver();
-			#elseif (js && !useal)
-			driver = new hxd.snd.webaudio.Driver();
-			#else
-			driver = new hxd.snd.openal.Driver();
-			#end
-		} catch(e : String) {
-			driver = null;
+			driver = createDriver();
+			// alloc sources
+			sources = [];
+			for (i in 0...MAX_SOURCES) sources.push(new Source(driver));
+		} catch(e : haxe.Exception) {
+			// no audio device: play every channel virtually
+			driverError = e;
+			if (driver != null) try driver.dispose() catch(_e) {}
+			driver  = null;
+			sources = [];
 		}
 
 		masterVolume       = 1.0;
@@ -137,12 +152,6 @@ class Manager {
 		freeStreamBuffers  = [];
 		effectGC           = [];
 		soundBufferCount   = 0;
-
-		if (driver != null) {
-			// alloc sources
-			sources = [];
-			for (i in 0...MAX_SOURCES) sources.push(new Source(driver));
-		}
 
 		cachedBytes   = haxe.io.Bytes.alloc(4 * 3 * 2);
 		resampleBytes = haxe.io.Bytes.alloc(STREAM_BUFFER_SAMPLE_COUNT * 2);
