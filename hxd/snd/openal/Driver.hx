@@ -20,6 +20,7 @@ class Driver implements hxd.snd.Driver {
 	var lastUpdate : Float;
 	var canReopenDevice : Bool;
 	var currentSpecifier : String;
+	var canPauseDevice : Bool;
 
 	public function new() {
 		tmpBytes = haxe.io.Bytes.alloc(4 * 3 * 2);
@@ -39,6 +40,12 @@ class Driver implements hxd.snd.Driver {
 		#if (hl && hlopenal >= version("1.16.0"))
 		if( hl.Api.isPrimLoaded(openal.ExtALC.reopenDeviceSoft) && ALC.isExtensionPresent(null, @:privateAccess openal.ExtALC.SOFT_reopen_device.toUtf8()) )
 			canReopenDevice = true;
+		#end
+
+		canPauseDevice = false;
+		#if (hl && hlopenal >= version("1.16.0"))
+		if( hl.Api.isPrimLoaded(openal.ExtALC.devicePauseSoft) && ALC.isExtensionPresent(device, @:privateAccess "ALC_SOFT_pause_device".toUtf8()) )
+			canPauseDevice = true;
 		#end
 
 		if (AL.getError() != AL.NO_ERROR)
@@ -202,6 +209,20 @@ class Driver implements hxd.snd.Driver {
 			}
 		}
 		#end
+	}
+
+	/**
+		Pauses (`true`) or resumes (`false`) the whole mix at the device with `ALC_SOFT_pause_device`, every source keeping
+		its position. Returns `false`, doing nothing, when the device does not have the extension.
+	**/
+	public function setPaused(paused : Bool) : Bool {
+		#if (hl && hlopenal >= version("1.16.0"))
+		if (canPauseDevice) {
+			if (paused) openal.ExtALC.devicePauseSoft(device) else openal.ExtALC.deviceResumeSoft(device);
+			return true;
+		}
+		#end
+		return false;
 	}
 
 	public function dispose() : Void {
