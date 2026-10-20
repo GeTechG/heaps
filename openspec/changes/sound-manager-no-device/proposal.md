@@ -4,6 +4,8 @@
 ## What Changes
 - The Manager catches any exception thrown while the driver is created and its sources allocated, disposes a driver that was created, and goes on without a driver.
 - `Manager.driverError`: the exception that left the Manager without a driver, `null` while it has one, so the application can show it.
+- Without a driver the Manager keeps an empty source list instead of `null`, so setting `timeOffset` no longer fails in virtual mode.
+- The driver is created by a private `static dynamic function createDriver()`, which a test replaces with a driver that fails.
 - The other places a driver touches the device were checked: the OpenAL device-change reopen runs in `driver.update()`, which the Manager does not call without a driver; `suspended` only makes channels virtual. Nothing changes there.
 
 ## Capabilities
@@ -14,4 +16,4 @@
 ### Modified Capabilities
 
 ## Impact
-`hxd/snd/Manager.hx`, the test `tests/NoDeviceTest.hx` with its stub driver in `tests/nodevice/`. A program that has a device sees no difference.
+`hxd/snd/Manager.hx`, the test `tests/NoDeviceTest.hx`. A program that has a device sees no difference.
