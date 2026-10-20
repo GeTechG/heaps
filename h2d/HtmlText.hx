@@ -576,7 +576,7 @@ class HtmlText extends Text {
 	inline function nextLine( align : Align, size : Float )
 	{
 		switch( align ) {
-			case Left:
+			case Left, Justify: // no justified layout in HtmlText
 				xPos = 0;
 				if (xMin > 0) xMin = 0;
 			case Right, Center, MultilineCenter, MultilineRight:
