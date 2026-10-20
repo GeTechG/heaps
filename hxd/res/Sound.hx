@@ -4,6 +4,7 @@ enum SoundFormat {
 	Wav;
 	Mp3;
 	OggVorbis;
+	OggOpus;
 }
 
 class Sound extends Resource {
@@ -24,6 +25,12 @@ class Sound extends Resource {
 			#else
 			return false;
 			#end
+		case OggOpus:
+			#if hl
+			return true;
+			#else
+			return false;
+			#end
 		}
 	}
 
@@ -39,8 +46,13 @@ class Sound extends Resource {
 			data = new hxd.snd.WavData(bytes);
 		case 255, 'I'.code: // MP3 (or ID3)
 			data = new hxd.snd.Mp3Data(bytes);
-		case 'O'.code: // Ogg (vorbis)
-			#if (hl || stb_ogg_sound)
+		case 'O'.code: // Ogg (vorbis or opus)
+			#if hl
+			if( hxd.snd.OpusData.isOpus(bytes) )
+				data = new hxd.snd.OpusData(bytes);
+			else
+				data = new hxd.snd.OggData(bytes);
+			#elseif stb_ogg_sound
 			data = new hxd.snd.OggData(bytes);
 			#else
 			throw "OGG format requires -lib stb_ogg_sound (for " + entry.path+")";
