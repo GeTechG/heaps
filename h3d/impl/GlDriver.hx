@@ -91,6 +91,7 @@ class GlDriver extends Driver {
 
 	#if (hlsdl||usegl)
 	var commonVA : VertexArray;
+	var onContextLost : Void -> Void;
 	#end
 
 	var commonFB : Framebuffer;
@@ -2101,10 +2102,55 @@ class GlDriver extends Driver {
 			}
 			js.Browser.window.addEventListener("load", onLoad);
 		}
+		#elseif (hlsdl||usegl)
+		haxe.Timer.delay(function() {
+			onCreate(false);
+			onContextLost = onCreate.bind(true);
+		}, 1);
 		#else
 		haxe.Timer.delay(onCreate.bind(false), 1);
 		#end
 	}
+
+	#if (hlsdl||usegl)
+	/**
+		Call when the GL context was replaced by a new one, as on SDL's `RenderDeviceReset` (Android may recreate its EGL context
+		when the application returns from the background): every GL object of the old context is gone. Resets the driver's state
+		for the new context, then runs the engine's context-lost path (`onCreate(true)`): its buffers and textures are disposed,
+		textures with `realloc` are reallocated on their next use, and `Engine.onContextLost` is called.
+	**/
+	public function onContextReset() {
+		// the old programs went with their context: forget them, their names may already belong to new objects
+		programs = new Map();
+		curShader = null;
+		curBuffer = null;
+		curIndexBuffer = null;
+		curMatBits = -1;
+		curStOpBits = -1;
+		curStMaskBits = -1;
+		curStEnabled = false;
+		curColorMask = -1;
+		curAttribs = [];
+		maxIdxCurAttribs = 0;
+		currentDivisor = [for( i in 0...32 ) 0];
+		lastActiveIndex = 0;
+		useDepthClamp = false;
+		boundTextures = [];
+		curTarget = null;
+		curTargets = [];
+		numTargets = 0;
+		commonFB = gl.createFramebuffer();
+		if( glES == null ) {
+			commonVA = gl.createVertexArray();
+			gl.bindVertexArray(commonVA);
+			gl.enable(GL.TEXTURE_CUBE_MAP_SEAMLESS);
+		}
+		gl.pixelStorei(GL.PACK_ALIGNMENT, 1);
+		gl.pixelStorei(GL.UNPACK_ALIGNMENT, 1);
+		if( onContextLost != null )
+			onContextLost();
+	}
+	#end
 
 	override function hasFeature( f : Feature ) : Bool {
 		return switch(f) {
