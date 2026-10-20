@@ -39,8 +39,15 @@ class System {
 	public static var screenDPI(get,never) : Float;
 	public static var setCursor = setNativeCursor;
 	public static var allowTimeout(get, set) : Bool;
+	/**
+		`true` while the application is in the background (on mobile: HOME, the lock screen, another application on top), from SDL's
+		background event until its foreground one. A window that only loses focus or is minimized does not set it.
+		While it is `true` the main loop keeps handling events but neither runs the loop function nor presents a frame.
+	**/
+	public static var isInBackground(default, null) : Bool = false;
 
 	static var loopFunc : Void -> Void;
+	static var backgroundListeners : Array<Bool -> Void> = [];
 	static var dismissErrors = false;
 
 	#if !usesys
@@ -84,6 +91,11 @@ class System {
 
 		// loop
 		timeoutTick();
+		if( isInBackground ) {
+			// no surface to draw on: wait for the foreground without spinning
+			Sys.sleep(0.05);
+			return;
+		}
 		if( loopFunc != null ) loopFunc();
 
 		// present
@@ -125,6 +137,9 @@ class System {
 		#else
 		timeoutTick();
 		#if hlsdl
+		// SDL's default holds the loop inside the event pump that carries the background events (Android), so the game
+		// would only see them on return; the main loop idles in the background instead (see isInBackground)
+		sdl.Sdl.setHint("SDL_ANDROID_BLOCK_ON_PAUSE", "0");
 		sdl.Sdl.init();
 		@:privateAccess Window.initChars();
 		#end
@@ -471,6 +486,25 @@ class System {
 	}
 
 	public static dynamic function onKeyboardLayoutChange() : Void {}
+
+	/**
+		Adds `f`, called with `true` when the application goes to the background and with `false` when it is back (see `isInBackground`).
+	**/
+	public static function addBackgroundListener( f : (background : Bool) -> Void ) : Void {
+		backgroundListeners.push(f);
+	}
+
+	public static function removeBackgroundListener( f : (background : Bool) -> Void ) : Void {
+		backgroundListeners.remove(f);
+	}
+
+	static function setBackground( b : Bool ) {
+		if( isInBackground == b ) return;
+		isInBackground = b;
+		for( f in backgroundListeners.copy() ) f(b);
+		// the time spent in the background is not a frame
+		if( !b ) hxd.Timer.skip();
+	}
 
 	// getters
 

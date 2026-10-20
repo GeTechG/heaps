@@ -120,10 +120,14 @@ class Manager {
 		Pauses the whole mix while `true`: the device stops playing (OpenAL: `ALC_SOFT_pause_device`; elsewhere every channel
 		gives up its source, to get one again on resume) and `update` neither queues buffers nor advances virtual channels and fades. Set back to `false`, every channel and fade goes on from where it was;
 		a channel played meanwhile starts then. Unlike `suspended`, which leaves the device playing and virtual channels running.
+		On HashLink the Manager pauses itself while the application is in the background (`hxd.System.isInBackground`).
 	**/
 	public var paused(default, set) : Bool = false;
 	var pauseStamp : Float;
 	var pausedInBackground : Bool = false;
+	#if hl
+	var backgroundListener : Bool -> Void;
+	#end
 	/**
 		The exception thrown while the sound driver was created, which left the Manager without a driver: every channel then plays virtually. `null` when the driver was created.
 	**/
@@ -184,6 +188,11 @@ class Manager {
 		if( instance == null ) {
 			instance = new Manager();
 			instance.updateEvent = haxe.MainLoop.add(instance.update);
+			#if hl
+			instance.backgroundListener = instance.onBackground;
+			hxd.System.addBackgroundListener(instance.backgroundListener);
+			if (hxd.System.isInBackground) instance.onBackground(true);
+			#end
 			instance.updateEvent.isBlocking = false;
 		}
 		return instance;
@@ -259,6 +268,9 @@ class Manager {
 		effectGC          = null;
 
 		updateEvent.stop();
+		#if hl
+		hxd.System.removeBackgroundListener(backgroundListener);
+		#end
 		instance = null;
 	}
 
