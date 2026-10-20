@@ -50,6 +50,15 @@ enum Align {
 		See Text sample for showcase.
 	**/
 	MultilineCenter;
+	/**
+		Stretches the lines the word-wrap broke to `Text.maxWidth`: the free space of such a line is spread evenly over the spaces between its words.
+
+		The last line of a paragraph, a line ending on a forced line break (`\n`), a line without spaces between its words
+		and any text without `Text.maxWidth` are aligned to the left edge, as with `Left`.
+
+		`HtmlText` aligns the text to the left edge.
+	**/
+	Justify;
 }
 
 /**
@@ -436,6 +445,46 @@ class Text extends Drawable {
 		return c;
 	}
 
+	/**
+		Fills `gaps` and `counts` with, for each line of `t` (`text` word-wrapped by `splitRawText`), the extra advance `Justify` gives
+		each of the first `counts[i]` spaces after the first visible glyph of line `i` so that its last visible glyph ends at `max`.
+		A line that is not stretched gets 0 and 0: one that is not followed by a break the word-wrap inserted, has no space between
+		visible glyphs or is already `max` wide.
+	**/
+	function justifyGaps( text : String, t : String, max : Float, gaps : Array<Float>, counts : Array<Int> ) {
+		var x = 0., right = 0., prevChar = -1, spaces = 0, inner = 0, visible = false;
+		var i = -1, j = 0;
+		while( ++i <= t.length ) {
+			var cc = i < t.length ? scalarAt(t, i) : '\n'.code;
+			if( cc == '\n'.code ) {
+				// t is text with a \n inserted at each wrap: a \n that text has as well is a forced break
+				var wrapped = i < t.length && (j >= text.length || StringTools.fastCodeAt(text, j) != '\n'.code);
+				if( !wrapped ) j++;
+				var stretch = wrapped && inner > 0 && right < max;
+				gaps.push(stretch ? (max - right) / inner : 0);
+				counts.push(stretch ? inner : 0);
+				x = right = 0;
+				prevChar = -1;
+				spaces = inner = 0;
+				visible = false;
+				continue;
+			}
+			j++;
+			var e = font.getChar(cc);
+			if( e != null ) {
+				var esize = e.width + e.getKerningOffset(prevChar);
+				if( !font.charset.isSpace(cc) ) {
+					right = x + esize;
+					inner = spaces;
+					visible = true;
+				} else if( visible )
+					spaces++;
+				x += esize + letterSpacing;
+			}
+			prevChar = cc;
+		}
+	}
+
 	function initGlyphs( text : String, rebuild = true ) : Void {
 		if( rebuild ) glyphs.clear();
 		var x = 0., y = 0., xMax = 0., xMin = 0., yMin = 0., yMax = 0., prevChar = -1, linei = 0;
@@ -443,6 +492,7 @@ class Text extends Drawable {
 		var lines = new Array<Float>();
 		var dl = font.lineHeight + lineSpacing;
 		var t = splitRawText(text, 0, 0, lines);
+		var gaps : Array<Float> = null, gapCounts : Array<Int> = null, gap = 0., gapsLeft = 0, lineVisible = false;
 
 		for ( lw in lines ) {
 			if ( lw > x ) x = lw;
@@ -457,6 +507,15 @@ class Text extends Drawable {
 				lines[i] = Math.ffloor((max - lines[i]) * k);
 			x = lines.length > 0 ? lines[0] : 0; // no line measured (e.g. negative glyph widths): lines[0] is undefined on JS
 			xMin = x;
+		case Justify:
+			x = 0;
+			if( realMaxWidth >= 0 ) {
+				gaps = [];
+				gapCounts = [];
+				justifyGaps(text, t, realMaxWidth, gaps, gapCounts);
+				gap = gaps[0];
+				gapsLeft = gapCounts[0];
+			}
 		case Left:
 			x = 0;
 		}
@@ -481,10 +540,19 @@ class Text extends Drawable {
 			}
 
 			if( cc == '\n'.code ) {
+				if( gaps != null && gapCounts[linei] > 0 ) x = realMaxWidth; // a stretched line ends at maxWidth, trailing spaces aside
 				if( x > xMax ) xMax = x;
 				switch( align ) {
 				case Left:
 					x = 0;
+				case Justify:
+					x = 0;
+					linei++;
+					if( gaps != null ) {
+						gap = gaps[linei];
+						gapsLeft = gapCounts[linei];
+						lineVisible = false;
+					}
 				case Right, Center, MultilineCenter, MultilineRight:
 					x = lines[++linei];
 					if( x < xMin ) xMin = x;
@@ -498,6 +566,14 @@ class Text extends Drawable {
 					var ty = y + e.t.dy + e.t.height;
 					if( ty > yMax ) yMax = ty;
 					x += esize + letterSpacing;
+					if( gapsLeft > 0 ) {
+						if( !font.charset.isSpace(cc) )
+							lineVisible = true;
+						else if( lineVisible ) {
+							x += gap;
+							gapsLeft--;
+						}
+					}
 				}
 				prevChar = cc;
 			}
