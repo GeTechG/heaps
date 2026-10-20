@@ -36,6 +36,13 @@ class OpusDataTest {
 			chunked.decode(tail, 0, data.samples - 200, 400);
 			check(clip.name + " silence past the end", rmsDiff(tail.sub(0, 200 * bpp), whole.sub((data.samples - 200) * bpp, 200 * bpp)) < 64 && isZero(tail.sub(200 * bpp, 200 * bpp)));
 
+			// a failed seek leaves no position behind: a retry seeks again, and a valid range decodes after it
+			for( attempt in 0...2 )
+				check(clip.name + " failed seek " + attempt, seekFails(chunked, 20000));
+			var again = haxe.io.Bytes.alloc(1000 * bpp);
+			chunked.decode(again, 0, 6000, 1000);
+			check(clip.name + " decode after a failed seek", rmsDiff(again, whole.sub(6000 * bpp, 1000 * bpp)) < 64);
+
 			var f32 = data.resample(48000, F32, clip.channels);
 			check(clip.name + " resample to F32", Std.isOfType(f32, hxd.snd.OpusData) && f32.sampleFormat == F32);
 			var floats = haxe.io.Bytes.alloc(data.samples * f32.getBytesPerSample());
@@ -63,6 +70,13 @@ class OpusDataTest {
 		trace("ok");
 	}
 
+	@:access(hxd.snd.OpusData.decodeBuffer)
+	static function seekFails( data : hxd.snd.OpusData, sampleStart : Int ) {
+		var msg = null;
+		try data.decodeBuffer(haxe.io.Bytes.alloc(16 * data.getBytesPerSample()), 0, sampleStart, 16) catch( e : String ) msg = e;
+		return msg == "Invalid sample start";
+	}
+
 	static function s16( b : haxe.io.Bytes, i : Int ) : Float {
 		var v = b.getUInt16(i);
 		return v >= 0x8000 ? v - 0x10000 : v;
@@ -72,7 +86,7 @@ class OpusDataTest {
 		var max = 0.;
 		for( k in 0...Std.int(a.length / bpv) ) {
 			var d = Math.abs(get(a, k * bpv) - s16(ref, k * 2));
-			if( d > max ) max = d;
+			if( !(d <= max) ) max = Math.isNaN(d) ? Math.POSITIVE_INFINITY : d;
 		}
 		return max;
 	}
