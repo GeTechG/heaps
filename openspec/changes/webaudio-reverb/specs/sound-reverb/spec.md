@@ -24,3 +24,10 @@ A `Reverb` added to several channels SHALL feed all of them into its one convolv
 #### Scenario: Shared reverb, one channel removed
 - **WHEN** one `Reverb` is on two playing channels and one of them stops
 - **THEN** the other channel is still connected to the convolver and the convolver still reaches the destination
+
+### Requirement: the tail pauses with the mix
+While `Manager.paused` is `true` the wet output of a `Reverb` on WebAudio SHALL be disconnected from the destination, so the tail is not heard; it SHALL be connected again on the first update after the mix goes on.
+
+#### Scenario: Mix paused with a reverb tail
+- **WHEN** `Manager.paused` is set to `true` while channels with a `Reverb` play, then back to `false` and the Manager updates
+- **THEN** the convolver's output is disconnected while paused, and connected again with the channels' sends after the update
