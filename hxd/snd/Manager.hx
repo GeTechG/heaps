@@ -26,6 +26,9 @@ class Source {
 	public var panned   = false;
 	public var panValue = 0.;
 
+	// what follows each sound end queued so far: the sound taken from the channel's queue, null for a loop restart
+	public var nextSounds : Array<hxd.res.Sound> = [];
+
 	public function new(driver : Driver) {
 		id      = ID++;
 		handle  = driver.createSource();
@@ -114,6 +117,18 @@ class Manager {
 
 	public var suspended : Bool = false;
 	/**
+		Pauses the whole mix while `true`: the device stops playing (OpenAL: `ALC_SOFT_pause_device`; elsewhere every channel
+		gives up its source, to get one again on resume) and `update` neither queues buffers nor advances virtual channels and fades. Set back to `false`, every channel and fade goes on from where it was;
+		a channel played meanwhile starts then. Unlike `suspended`, which leaves the device playing and virtual channels running.
+		On HashLink the Manager pauses itself while the application is in the background (`hxd.System.isInBackground`).
+	**/
+	public var paused(default, set) : Bool = false;
+	var pauseStamp : Float;
+	var pausedInBackground : Bool = false;
+	#if hl
+	var backgroundListener : Bool -> Void;
+	#end
+	/**
 		The exception thrown while the sound driver was created, which left the Manager without a driver: every channel then plays virtually. `null` when the driver was created.
 	**/
 	public var driverError(default, null) : haxe.Exception;
@@ -173,6 +188,11 @@ class Manager {
 		if( instance == null ) {
 			instance = new Manager();
 			instance.updateEvent = haxe.MainLoop.add(instance.update);
+			#if hl
+			instance.backgroundListener = instance.onBackground;
+			hxd.System.addBackgroundListener(instance.backgroundListener);
+			if (hxd.System.isInBackground) instance.onBackground(true);
+			#end
 			instance.updateEvent.isBlocking = false;
 		}
 		return instance;
@@ -248,6 +268,9 @@ class Manager {
 		effectGC          = null;
 
 		updateEvent.stop();
+		#if hl
+		hxd.System.removeBackgroundListener(backgroundListener);
+		#end
 		instance = null;
 	}
 
@@ -267,7 +290,7 @@ class Manager {
 		c.next         = channels;
 		c.isLoading    = sdat.isLoading();
 		c.isVirtual    = driver == null;
-		c.lastStamp    = haxe.Timer.stamp();
+		c.lastStamp    = paused ? pauseStamp : haxe.Timer.stamp();
 
 		channels = c;
 		return c;
@@ -306,7 +329,58 @@ class Manager {
 		}
 	}
 
+	function set_paused(v : Bool) {
+		// the game's own choice: no longer resumed on return from the background
+		pausedInBackground = false;
+		if (v == paused) return v;
+		paused = v;
+		var now = haxe.Timer.stamp();
+		if (v)
+			pauseStamp = now;
+		else {
+			// move every stamp past the pause, one taken during the pause to its end
+			inline function shift(t : Float) return t < now ? t + (now - Math.max(t, pauseStamp)) : t;
+			var groups = [masterChannelGroup];
+			var c = channels;
+			while (c != null) {
+				c.lastStamp = shift(c.lastStamp);
+				if (c.currentFade != null) c.currentFade.start = shift(c.currentFade.start);
+				if (groups.indexOf(c.channelGroup) < 0) groups.push(c.channelGroup);
+				c = c.next;
+			}
+			for (g in groups)
+				if (g.currentFade != null) g.currentFade.start = shift(g.currentFade.start);
+			if (sources != null)
+				for (s in sources)
+					for (b in s.buffers)
+						b.lastStop = shift(b.lastStop);
+		}
+		if (driver != null && !pauseDevice(v) && v)
+			// no device pause: stop every source, the channels keep their positions and get a source again on resume
+			for (s in sources) releaseSource(s);
+		return v;
+	}
+
+	function pauseDevice(v : Bool) : Bool {
+		#if !(usesys || (js && !useal))
+		var al = Std.downcast(driver, hxd.snd.openal.Driver);
+		if (al != null) return al.setPaused(v);
+		#end
+		return false;
+	}
+
+	function onBackground(background : Bool) {
+		if (background) {
+			if (!paused) {
+				paused = true;
+				pausedInBackground = true;
+			}
+		} else if (pausedInBackground)
+			paused = false;
+	}
+
 	public function update() {
+		if (paused) return;
 		if( timeOffset != 0 ) {
 			var c = channels;
 			while( c != null ) {
@@ -348,6 +422,7 @@ class Manager {
 				if( b == null ) continue;
 				lastBuffer = b;
 				if (b.isEnd) {
+					s.nextSounds.shift();
 					c.sound           = b.sound;
 					c.duration        = b.sound.getData().duration;
 					c.position        = c.duration;
@@ -406,11 +481,14 @@ class Manager {
 				} else if (c.queue.length > 0) {
 					// queue next sound buffer
 					var snd = c.queue[0];
-					if( queueBuffer(s, snd, 0) )
+					if( queueBuffer(s, snd, 0) ) {
 						c.queue.shift();
+						s.nextSounds.push(snd);
+					}
 				} else if (c.loop) {
 					// requeue last played sound
-					queueBuffer(s, b.sound, 0);
+					if( queueBuffer(s, b.sound, 0) )
+						s.nextSounds.push(null);
 				}
 				// one buffer per update, as many as needed for mixed ones
 				if (!s.panned || s.buffers.length == queued) break;
@@ -689,6 +767,10 @@ class Manager {
 
 	function releaseSource(s : Source) {
 		if (s.channel != null) {
+			// give the channel back the queued sounds the source took but did not reach
+			var i = s.nextSounds.length;
+			while (i-- > 0)
+				if (s.nextSounds[i] != null) s.channel.queue.unshift(s.nextSounds[i]);
 			for (e in s.channel.bindedEffects.copy()) unbindEffect(s.channel, s, e);
 			s.channel.bindedEffects = [];
 			s.channel.source = null;
@@ -702,6 +784,7 @@ class Manager {
 		}
 
 		while(s.buffers.length > 0) unqueueBuffer(s);
+		s.nextSounds = [];
 	}
 
 	var targetRate     : Int;

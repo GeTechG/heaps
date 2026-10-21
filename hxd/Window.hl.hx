@@ -606,10 +606,31 @@ class Window {
 			return onCloseEvent();
 		#end
 		default:
+			#if hlsdl
+			onAppEvent(cast e.type);
+			#end
 		}
 		if( eh != null ) event(eh);
 		return true;
 	}
+
+	#if hlsdl
+	// SDL application events (hashlink SDL library GeTechG/hashlink 28c215a8 or later), matched by value:
+	// an older library never delivers them and still compiles
+	function onAppEvent( type : Int ) {
+		switch( type ) {
+		case 602, 603: // AppWillEnterBackground, AppDidEnterBackground
+			@:privateAccess hxd.System.setBackground(true);
+		case 605: // AppDidEnterForeground
+			@:privateAccess hxd.System.setBackground(false);
+		case 700: // RenderDeviceReset: the GL context was replaced by a new one
+			var engine = h3d.Engine.getCurrent();
+			var driver = engine == null ? null : Std.downcast(engine.driver, h3d.impl.GlDriver);
+			if( driver != null ) driver.onContextReset();
+		default:
+		}
+	}
+	#end
 
 	function onCloseEvent() {
 		var ret = onClose();
