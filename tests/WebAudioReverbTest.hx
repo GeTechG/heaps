@@ -138,7 +138,8 @@ class WebAudioReverbTest {
 		var conv : Dynamic = rd.convolver;
 		check(conv != null && conv.buffer != null && conv.normalize == false, "convolver with a response");
 		check(connected(rd.input, conv) && connected(conv, rd.wet), "send chain");
-		check(connected(rd.wet, drv.destination), "wet not at destination");
+		var fx : Dynamic = drv.getEffectsOutput();
+		check(connected(rd.wet, fx) && connected(fx, drv.destination), "wet not at destination");
 		check(Math.abs(rd.wet.gain.value - 0.4) < 1e-9, "wet gain " + rd.wet.gain.value);
 		var ga : Dynamic = @:privateAccess a.source.handle.gain, gb : Dynamic = @:privateAccess b.source.handle.gain;
 		check(connected(ga, rd.input) && connected(gb, rd.input), "both channels sent");
@@ -160,10 +161,10 @@ class WebAudioReverbTest {
 
 		// pausing the mix silences the tail, resuming brings it back
 		m.paused = true;
-		check(!connected(ga, rd.input) && !connected(rd.wet, drv.destination), "tail heard while paused");
+		check(!connected(ga, rd.input) && fx.gain.value == 0, "tail heard while paused");
 		m.paused = false;
 		m.update();
-		check(connected(rd.wet, drv.destination), "tail not back after the pause");
+		check(fx.gain.value == 1, "tail not back after the pause");
 		ga = @:privateAccess a.source.handle.gain;
 		gb = @:privateAccess b.source.handle.gain;
 		check(connected(ga, rd.input) && connected(gb, rd.input), "sends not back after the pause");
@@ -172,9 +173,13 @@ class WebAudioReverbTest {
 		a.stop();
 		m.update();
 		check(!connected(ga, rd.input) && connected(gb, rd.input), "send of the stopped channel");
-		check(connected(rd.wet, drv.destination), "tail cut");
+		check(connected(rd.wet, fx) && connected(fx, drv.destination), "tail cut");
 		b.stop();
 		m.update();
+		// a tail kept after its last channel stopped is paused too
+		m.paused = true;
+		check(fx.gain.value == 0, "retained tail heard while paused");
+		m.paused = false;
 
 		// two LowPass on one channel, the first removed: the second still has its node
 		var c = sound("c.wav").play(true);

@@ -1,7 +1,6 @@
 package hxd.snd.webaudio;
 
 #if (js && !useal)
-import js.html.audio.AudioNode;
 import js.html.audio.ConvolverNode;
 import js.html.audio.GainNode;
 import js.lib.Float32Array;
@@ -21,7 +20,6 @@ class ReverbDriver extends EffectDriver<Reverb> {
 	var input     : GainNode;
 	var convolver : ConvolverNode;
 	var wet       : GainNode;
-	var output    : AudioNode;
 	var params    : Array<Float>;
 
 	public function new(driver) {
@@ -32,6 +30,7 @@ class ReverbDriver extends EffectDriver<Reverb> {
 	override function acquire() : Void {
 		input = driver.ctx.createGain();
 		wet = driver.ctx.createGain();
+		wet.connect(driver.getEffectsOutput());
 		params = null;
 	}
 
@@ -42,7 +41,6 @@ class ReverbDriver extends EffectDriver<Reverb> {
 		input = null;
 		convolver = null;
 		wet = null;
-		output = null;
 	}
 
 	override function update(e : Reverb) : Void {
@@ -68,11 +66,7 @@ class ReverbDriver extends EffectDriver<Reverb> {
 			convolver = c;
 		}
 		wet.gain.value = e.wetDryMix / 100.0;
-		if ( output != driver.destination ) {
-			if ( output != null ) wet.disconnect();
-			output = driver.destination;
-			wet.connect(output);
-		}
+		driver.getEffectsOutput(); // follows a change of the driver destination
 
 		// keep the convolver until its whole response has played out
 		@:privateAccess
@@ -85,12 +79,6 @@ class ReverbDriver extends EffectDriver<Reverb> {
 
 	override function unbind(e : Reverb, source : SourceHandle) : Void {
 		if ( source.gain != null ) try source.gain.disconnect(input) catch( _ : Dynamic ) {}
-		// the whole mix is paused (no device pause on WebAudio: the channels give up their sources), the tail too;
-		// update() connects it again once the mix goes on
-		if ( hxd.snd.Manager.get().paused && output != null ) {
-			wet.disconnect();
-			output = null;
-		}
 	}
 
 	static inline function mbToGain( mb : Float ) : Float {

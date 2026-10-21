@@ -365,6 +365,10 @@ class Manager {
 		#if !(usesys || (js && !useal))
 		var al = Std.downcast(driver, hxd.snd.openal.Driver);
 		if (al != null) return al.setPaused(v);
+		#elseif (js && !useal)
+		// no device pause on WebAudio, but the tails of the effects have to stop with the mix
+		var web = Std.downcast(driver, hxd.snd.webaudio.Driver);
+		if (web != null) web.setEffectsPaused(v);
 		#end
 		return false;
 	}
