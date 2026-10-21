@@ -12,6 +12,8 @@ class Driver implements hxd.snd.Driver {
 	public var destination(get, set) : AudioNode;
 
 	var playbackPool : Array<BufferPlayback>;
+	var effectsGain : GainNode;
+	var effectsOutput : AudioNode;
 
 	public function new()
 	{
@@ -239,6 +241,25 @@ class Driver implements hxd.snd.Driver {
 		return source.sampleOffset + consumed;
 	}
 
+	/**
+		Where effects with an output of their own (the reverb tail) send it: a gain on the driver destination,
+		muted while the mix is paused, since the tail goes on after the sources are released.
+	**/
+	public function getEffectsOutput() : AudioNode {
+		if ( effectsGain == null ) effectsGain = ctx.createGain();
+		if ( effectsOutput != destination ) {
+			if ( effectsOutput != null ) effectsGain.disconnect();
+			effectsOutput = destination;
+			effectsGain.connect(effectsOutput);
+		}
+		return effectsGain;
+	}
+
+	public function setEffectsPaused( v : Bool ) : Void {
+		getEffectsOutput();
+		effectsGain.gain.value = v ? 0 : 1;
+	}
+
 	public function update () : Void { }
 	public function dispose () : Void {
 		// TODO
@@ -250,7 +271,7 @@ class Driver implements hxd.snd.Driver {
 			case "spatialization" : new SpatializationDriver();
 			case "lowpass"        : new LowPassDriver();
 			case "pan"            : new PanDriver();
-			// case "reverb"         : new ReverbDriver(this);
+			case "reverb"         : new ReverbDriver(this);
 			default               : new hxd.snd.Driver.EffectDriver<Dynamic>();
 		}
 	}

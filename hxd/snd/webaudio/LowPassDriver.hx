@@ -27,8 +27,11 @@ class LowPassDriver extends EffectDriver<LowPass> {
 	}
 
 	override public function bind(e:LowPass, source: SourceHandle) : Void {
-		source.lowPass = get(source.driver.ctx);
-		source.updateDestination();
+		// one filter node per source whatever the number of LowPass effects: the last applied wins, as on OpenAL
+		if ( source.lowPassRefs++ == 0 ) {
+			source.lowPass = get(source.driver.ctx);
+			source.updateDestination();
+		}
 		apply(e, source);
 	}
 
@@ -40,6 +43,7 @@ class LowPassDriver extends EffectDriver<LowPass> {
 	}
 
 	override function unbind(e : LowPass, source : SourceHandle) : Void {
+		if ( --source.lowPassRefs > 0 ) return;
 		pool.push(source.lowPass);
 		source.lowPass.disconnect();
 		source.lowPass = null;
