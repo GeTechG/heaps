@@ -74,8 +74,9 @@ class ReverbDriver extends EffectDriver<Reverb> {
 			wet.connect(output);
 		}
 
+		// keep the convolver until its whole response has played out
 		@:privateAccess
-		e.retainTime = e.decayTime + e.reflectionsDelay + e.reverbDelay;
+		e.retainTime = convolver.buffer.duration;
 	}
 
 	override function bind(e : Reverb, source : SourceHandle) : Void {

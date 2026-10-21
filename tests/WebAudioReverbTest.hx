@@ -152,7 +152,11 @@ class WebAudioReverbTest {
 		m.update();
 		check(rd.convolver != conv && connected(rd.input, rd.convolver) && !connected(rd.input, conv), "response not regenerated");
 		check(rd.convolver.buffer.length > conv.buffer.length, "longer decay, longer response");
-		check(@:privateAccess reverb.retainTime == reverb.decayTime + reverb.reflectionsDelay + reverb.reverbDelay, "retainTime");
+		check(@:privateAccess reverb.retainTime == rd.convolver.buffer.duration, "retainTime");
+		// with a slower HF decay the response, and the retention, outlast decayTime
+		reverb.decayHFRatio = 1.5;
+		m.update();
+		check(@:privateAccess reverb.retainTime >= reverb.reflectionsDelay + reverb.reverbDelay + reverb.decayTime * 1.5, "retainTime with decayHFRatio > 1");
 
 		// one channel stops: only its send goes
 		a.stop();
