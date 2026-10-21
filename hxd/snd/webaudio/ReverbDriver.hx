@@ -85,6 +85,12 @@ class ReverbDriver extends EffectDriver<Reverb> {
 
 	override function unbind(e : Reverb, source : SourceHandle) : Void {
 		if ( source.gain != null ) try source.gain.disconnect(input) catch( _ : Dynamic ) {}
+		// the whole mix is paused (no device pause on WebAudio: the channels give up their sources), the tail too;
+		// update() connects it again once the mix goes on
+		if ( hxd.snd.Manager.get().paused && output != null ) {
+			wet.disconnect();
+			output = null;
+		}
 	}
 
 	static inline function mbToGain( mb : Float ) : Float {

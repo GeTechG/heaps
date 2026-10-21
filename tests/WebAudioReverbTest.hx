@@ -158,6 +158,16 @@ class WebAudioReverbTest {
 		m.update();
 		check(@:privateAccess reverb.retainTime >= reverb.reflectionsDelay + reverb.reverbDelay + reverb.decayTime * 1.5, "retainTime with decayHFRatio > 1");
 
+		// pausing the mix silences the tail, resuming brings it back
+		m.paused = true;
+		check(!connected(ga, rd.input) && !connected(rd.wet, drv.destination), "tail heard while paused");
+		m.paused = false;
+		m.update();
+		check(connected(rd.wet, drv.destination), "tail not back after the pause");
+		ga = @:privateAccess a.source.handle.gain;
+		gb = @:privateAccess b.source.handle.gain;
+		check(connected(ga, rd.input) && connected(gb, rd.input), "sends not back after the pause");
+
 		// one channel stops: only its send goes
 		a.stop();
 		m.update();
