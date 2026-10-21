@@ -4,7 +4,7 @@
 On the way: `webaudio/LowPassDriver.bind` with a second `LowPass` on the same source replaces `source.lowPass` without releasing the first node; when either `LowPass` is then removed, the source is left with no filter node and the remaining one fails on its next `apply`.
 
 ## What Changes
-- `hxd.snd.webaudio.ReverbDriver`: one `ConvolverNode` per `Reverb` instance, fed by every source the effect is bound to (a send from the source gain, in parallel with the dry path), its output scaled by `wetDryMix / 100` (as `EFFECTSLOT_GAIN` on OpenAL) into the driver's destination. The impulse response is generated from the I3DL2 fields of the effect and regenerated when one of them changes; `wetDryMix` changes only the gain. `retainTime` covers the tail, as on OpenAL.
+- `hxd.snd.webaudio.ReverbDriver`: one `ConvolverNode` per `Reverb` instance, fed by every source the effect is bound to (a send from the source gain, in parallel with the dry path), its output scaled by `wetDryMix / 100` (as `EFFECTSLOT_GAIN` on OpenAL) into the driver's destination. The impulse response is generated from the I3DL2 fields of the effect and regenerated when one of them changes; `wetDryMix` changes only the gain. `retainTime` is the duration of the response, so the tail is not cut when the last channel leaves.
 - `webaudio/Driver.getEffectDriver("reverb")` returns it.
 - `webaudio/LowPassDriver`: a source keeps one filter node however many `LowPass` effects are bound to it; it is released when the last one is removed. The last applied `gainHF` wins, as on OpenAL where a source has one direct filter.
 

@@ -19,7 +19,7 @@ The convolver's impulse response SHALL be stereo, with no normalization by the n
 - **THEN** the convolver gets a response generated from the new value
 
 ### Requirement: one Reverb on several channels
-A `Reverb` added to several channels SHALL feed all of them into its one convolver. Removing it from one channel SHALL disconnect only that channel's send; the tail already in the convolver SHALL go on. The convolver SHALL be kept until `retainTime` (`decayTime + reflectionsDelay + reverbDelay`) after the last channel is removed.
+A `Reverb` added to several channels SHALL feed all of them into its one convolver. Removing it from one channel SHALL disconnect only that channel's send; the tail already in the convolver SHALL go on. The convolver SHALL be kept until `retainTime`, the duration of its impulse response (`reflectionsDelay + reverbDelay + decayTime · max(1, decayHFRatio)`), after the last channel is removed.
 
 #### Scenario: Shared reverb, one channel removed
 - **WHEN** one `Reverb` is on two playing channels and one of them stops
