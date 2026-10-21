@@ -26,8 +26,12 @@ A `Reverb` added to several channels SHALL feed all of them into its one convolv
 - **THEN** the other channel is still connected to the convolver and the convolver still reaches the destination
 
 ### Requirement: the tail pauses with the mix
-While `Manager.paused` is `true` the wet output of a `Reverb` on WebAudio SHALL be disconnected from the destination, so the tail is not heard; it SHALL be connected again on the first update after the mix goes on.
+On WebAudio the output of every `Reverb` SHALL go to the destination through one effects gain of the driver (`Driver.getEffectsOutput()`). While `Manager.paused` is `true` that gain SHALL be `0`, so no tail is heard, whether its channels still play or have already stopped while the effect is retained; it SHALL be `1` again when the mix goes on.
 
 #### Scenario: Mix paused with a reverb tail
 - **WHEN** `Manager.paused` is set to `true` while channels with a `Reverb` play, then back to `false` and the Manager updates
-- **THEN** the convolver's output is disconnected while paused, and connected again with the channels' sends after the update
+- **THEN** the effects gain is `0` while paused, and `1` with the channels' sends connected again after the update
+
+#### Scenario: Mix paused during a retained tail
+- **WHEN** the last channel of a `Reverb` stopped and the Manager updated, and `Manager.paused` is then set to `true` before `retainTime` has passed
+- **THEN** the effects gain is `0`
