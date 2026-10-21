@@ -16,6 +16,7 @@ class SourceHandle {
 
 	public var driver : Driver;
 	public var lowPass : BiquadFilterNode;
+	public var lowPassRefs : Int;
 	public var panner : PannerNode;
 	public var stereoPanner : StereoPannerNode;
 	public var gain : GainNode;
@@ -29,6 +30,7 @@ class SourceHandle {
 		sampleOffset = 0;
 		pitch = 1;
 		firstPlay = true;
+		lowPassRefs = 0;
 	}
 
 	public function updateDestination() {
