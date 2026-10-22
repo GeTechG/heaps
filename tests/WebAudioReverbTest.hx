@@ -1,5 +1,5 @@
 // Run: haxe -cp . -cp tests -lib format --main WebAudioReverbTest --js test.js && node test.js
-// hxd.snd.effect.Reverb on the WebAudio driver: one convolver per effect fed by every channel it is on, a response generated from the I3DL2 fields; several LowPass on one channel share one filter node.
+// hxd.snd.effect.Reverb on the WebAudio driver: one convolver per effect fed by every channel it is on, a response generated from the I3DL2 fields; several LowPass on one channel share one filter node; a source starts only once its effects are in the graph, so a short first channel on a new Reverb is reverberated.
 import hxd.snd.effect.Reverb;
 import hxd.snd.effect.LowPass;
 import hxd.snd.webaudio.ReverbDriver;
@@ -31,7 +31,18 @@ class WebAudioReverbTest {
 					this.outs.delete(n);
 				}
 				addEventListener() {} removeEventListener() {}
-				start() {} stop() {}
+				start() {
+					// whether what this node plays reaches a convolver that has a response
+					const seen = new Set(), reach = n => {
+						if (seen.has(n)) return false;
+						seen.add(n);
+						if (n.kind == 'convolver' && n.buffer != null) return true;
+						for (const o of n.outs) if (reach(o)) return true;
+						return false;
+					};
+					globalThis.starts.push({ node: this, wet: reach(this) });
+				}
+				stop() {}
 				setPosition() {} setOrientation() {}
 			}
 			class Buffer {
@@ -41,6 +52,7 @@ class WebAudioReverbTest {
 				}
 				getChannelData(i) { return this.data[i]; }
 			}
+			globalThis.starts = [];
 			globalThis.AudioContext = class {
 				constructor() {
 					this.nodes = []; this.state = 'running'; this.sampleRate = 48000; this.currentTime = 0;
@@ -68,9 +80,9 @@ class WebAudioReverbTest {
 		return a.outs.has(b);
 	}
 
-	static function sound(name : String) {
+	static function sound(name : String, samples = 44100 * 4) {
 		var snd = new hxd.res.Sound(new hxd.fs.BytesFileSystem.BytesFileEntry(name, haxe.io.Bytes.alloc(0)));
-		snd.setData(new ConstData(44100 * 4));
+		snd.setData(new ConstData(samples));
 		return snd;
 	}
 
@@ -204,9 +216,38 @@ class WebAudioReverbTest {
 		m.update();
 	}
 
+	// a channel shorter than the generation of the response, on a new Reverb: its first sample already goes through the convolver
+	static function firstChannel() {
+		var m = hxd.snd.Manager.get();
+		var starts : Array<Dynamic> = js.Syntax.code("globalThis.starts");
+		starts.resize(0);
+		var cave = new Reverb();
+		cave.decayTime = 3.8;
+		var click = sound("click.wav", Std.int(44100 * 0.03)).play();
+		click.addEffect(cave);
+		m.update();
+		var rd : Dynamic = @:privateAccess cave.driver;
+		check(rd.convolver != null && rd.convolver.buffer != null, "convolver with a response");
+		check(starts.length > 0, "short channel not started");
+		for (s in starts) check(s.wet, "short channel started before its reverb was in the graph");
+
+		// the same preset on another Reverb: the response is not generated again
+		var again = new Reverb();
+		again.decayTime = 3.8;
+		var c2 = sound("click2.wav", Std.int(44100 * 0.03)).play();
+		c2.addEffect(again);
+		m.update();
+		var rd2 : Dynamic = @:privateAccess again.driver;
+		check(rd2.convolver != rd.convolver && rd2.convolver.buffer == rd.convolver.buffer, "response generated again for the same preset");
+		click.stop();
+		c2.stop();
+		m.update();
+	}
+
 	static function main() {
 		stubWebAudio();
 		impulse();
+		firstChannel();
 		graph();
 		trace("WebAudioReverbTest ok");
 	}
