@@ -1,6 +1,7 @@
 package hxd.snd.webaudio;
 
 #if (js && !useal)
+import js.html.audio.AudioBuffer;
 import js.html.audio.ConvolverNode;
 import js.html.audio.GainNode;
 import js.lib.Float32Array;
@@ -15,6 +16,10 @@ import hxd.snd.webaudio.AudioTypes;
 class ReverbDriver extends EffectDriver<Reverb> {
 
 	static inline var EARLY_MAX_TAPS = 8;
+	static inline var CACHE_SIZE = 8;
+
+	// generated responses by their parameters, most recently used last
+	static var cache : Array<{ key : String, buffer : AudioBuffer }> = [];
 
 	var driver    : Driver;
 	var input     : GainNode;
@@ -50,13 +55,9 @@ class ReverbDriver extends EffectDriver<Reverb> {
 		if ( !changed ) for ( i in 0...p.length ) if ( p[i] != params[i] ) { changed = true; break; }
 		if ( changed ) {
 			params = p;
-			var rate = driver.ctx.sampleRate;
-			var channels = generate(e, rate);
-			var buf = driver.ctx.createBuffer(channels.length, channels[0].length, rate);
-			for ( i in 0...channels.length ) buf.getChannelData(i).set(channels[i]);
 			var c = driver.ctx.createConvolver();
 			c.normalize = false;
-			c.buffer = buf;
+			c.buffer = getResponse(e, p.join(","));
 			c.connect(wet);
 			input.connect(c);
 			if ( convolver != null ) {
@@ -79,6 +80,21 @@ class ReverbDriver extends EffectDriver<Reverb> {
 
 	override function unbind(e : Reverb, source : SourceHandle) : Void {
 		if ( source.gain != null ) try source.gain.disconnect(input) catch( _ : Dynamic ) {}
+	}
+
+	function getResponse( e : Reverb, key : String ) : AudioBuffer {
+		for ( i in 0...cache.length ) if ( cache[i].key == key ) {
+			var r = cache.splice(i, 1)[0];
+			cache.push(r);
+			return r.buffer;
+		}
+		var rate = driver.ctx.sampleRate;
+		var channels = generate(e, rate);
+		var buf = driver.ctx.createBuffer(channels.length, channels[0].length, rate);
+		for ( i in 0...channels.length ) buf.getChannelData(i).set(channels[i]);
+		cache.push({ key : key, buffer : buf });
+		if ( cache.length > CACHE_SIZE ) cache.shift();
+		return buf;
 	}
 
 	static inline function mbToGain( mb : Float ) : Float {
@@ -110,8 +126,8 @@ class ReverbDriver extends EffectDriver<Reverb> {
 		// late tail: noise with one sample in `keep` when not fully diffuse, split in two bands at hfReference
 		var keep = 0.1 + 0.9 * diffusion;
 		var cut = 1 - Math.exp(-2 * Math.PI * hxd.Math.clamp(e.hfReference, 20, rate * 0.45) / rate);
-		var kLow = -3 * Math.log(10) / (decay * rate);
-		var kHigh = -3 * Math.log(10) / (decayHF * rate);
+		var stepLow = Math.exp(-3 * Math.log(10) / (decay * rate));
+		var stepHigh = Math.exp(-3 * Math.log(10) / (decayHF * rate));
 
 		var rnd = new hxd.Rand(0x5EED);
 		var out = [];
@@ -124,11 +140,13 @@ class ReverbDriver extends EffectDriver<Reverb> {
 			}
 
 			var low = new Float32Array(lateLength), high = new Float32Array(lateLength);
-			var lp = 0., energy = 0.;
+			var lp = 0., energy = 0., envLow = 1., envHigh = 1.;
 			for ( i in 0...lateLength ) {
 				var x = rnd.rand() < keep ? rnd.srand() / Math.sqrt(keep) : 0.;
 				lp += cut * (x - lp);
-				var l = lp * Math.exp(kLow * i), h = (x - lp) * Math.exp(kHigh * i);
+				var l = lp * envLow, h = (x - lp) * envHigh;
+				envLow *= stepLow;
+				envHigh *= stepHigh;
 				low[i] = l;
 				high[i] = h;
 				energy += (l + h) * (l + h);

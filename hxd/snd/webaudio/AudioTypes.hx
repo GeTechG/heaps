@@ -13,6 +13,7 @@ class BufferHandle {
 class SourceHandle {
 	public var sampleOffset   : Int;
 	public var playing        : Bool;
+	var startPending          : Bool; // played, its buffers wait for Driver.update to start
 
 	public var driver : Driver;
 	public var lowPass : BiquadFilterNode;

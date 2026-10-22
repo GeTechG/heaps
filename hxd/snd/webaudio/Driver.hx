@@ -12,12 +12,14 @@ class Driver implements hxd.snd.Driver {
 	public var destination(get, set) : AudioNode;
 
 	var playbackPool : Array<BufferPlayback>;
+	var pendingStarts : Array<SourceHandle>;
 	var effectsGain : GainNode;
 	var effectsOutput : AudioNode;
 
 	public function new()
 	{
 		playbackPool = [];
+		pendingStarts = [];
 
 		ctx = Context.get();
 	}
@@ -72,21 +74,30 @@ class Driver implements hxd.snd.Driver {
 		return s;
 	}
 
+	/**
+		Marks the source playing; its buffers start in `update()`, at the end of the Manager update,
+		once the effects bound to it in that update are in the graph (the reverb convolver with its response).
+	**/
 	public function playSource (source : SourceHandle) : Void {
 		if ( !source.playing ) {
 			source.playing = true;
-			if ( source.buffers.length != 0 ) {
-				var time = ctx.currentTime;
-				for ( b in source.buffers ) {
-					if ( b.consumed ) continue;
-					time = b.start(ctx, source, time);
-				}
-			}
+			source.startPending = true;
+			pendingStarts.push(source);
+		}
+	}
+
+	function startSource (source : SourceHandle) : Void {
+		source.startPending = false;
+		var time = ctx.currentTime;
+		for ( b in source.buffers ) {
+			if ( b.consumed ) continue;
+			time = b.start(ctx, source, time);
 		}
 	}
 
 	public function stopSource (source : SourceHandle) : Void {
 		source.playing = false;
+		source.startPending = false;
 		source.sampleOffset = 0;
 	}
 
@@ -194,7 +205,7 @@ class Driver implements hxd.snd.Driver {
 		buf.set(buffer, (sampleStart / buffer.inst.length) * buffer.inst.duration);
 		buffer.isEnd = endOfStream;
 		source.buffers.push(buf);
-		if ( source.playing ) {
+		if ( source.playing && !source.startPending ) {
 			if ( source.buffers.length != 1 ) {
 				var t = source.buffers[source.buffers.length - 2].ends;
 				buf.start(ctx, source, (js.Syntax.code("isFinite({0})", t):Bool) ? hxd.Math.max(t, ctx.currentTime) : ctx.currentTime);
@@ -260,7 +271,10 @@ class Driver implements hxd.snd.Driver {
 		effectsGain.gain.value = v ? 0 : 1;
 	}
 
-	public function update () : Void { }
+	public function update () : Void {
+		for ( s in pendingStarts ) if ( s.startPending ) startSource(s);
+		pendingStarts.resize(0);
+	}
 	public function dispose () : Void {
 		// TODO
 	}
