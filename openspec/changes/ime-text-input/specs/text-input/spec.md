@@ -12,18 +12,18 @@ When the platform commits text, `hxd.Window` SHALL send one `ETextInput` event p
 - **THEN** two `ETextInput` events are sent, with `charCode` 0x61 then 0x1F600
 
 ### Requirement: the composition reaches the game
-While an IME composes text, `hxd.Window` SHALL send an `ETextEditing` event to its event targets each time the composition changes, with the whole composition in `text`, the cursor or selection start in `editCursor` and the selection length in `editLength` (code points; -1 when the platform does not give one). When the composition ends, committed or cancelled, an `ETextEditing` with an empty `text` SHALL be sent. On HashLink/SDL these come from SDL's `TextEditing` event, matched by its numeric value (10) so that the sources build with an SDL library that does not define it. On JS they come from `compositionupdate` and `compositionend` on the window's event element; `compositionend` SHALL also send the committed text as `ETextInput` events.
+While an IME composes text, `hxd.Window` SHALL call its dynamic `onTextEditing(text, cursor, length)` each time the composition changes, with the whole composition in `text`, the cursor or selection start in `cursor` and the selection length in `length` (code points; -1 when the platform does not give one). When the composition ends, committed or cancelled, it SHALL be called with an empty `text`. The composition SHALL NOT be sent as an `hxd.Event`, so that exhaustive switches over `hxd.EventKind` keep compiling. On HashLink/SDL these come from SDL's `TextEditing` event, matched by its numeric value (10) so that the sources build with an SDL library that does not define it. On JS they come from `compositionupdate` and `compositionend` on the window's event element; `compositionend` SHALL also send the committed text as `ETextInput` events.
 
 #### Scenario: Composing
 - **WHEN** the IME shows `にほ` with the cursor after it
-- **THEN** an `ETextEditing` is sent with `text` `にほ` and `editCursor` 2
+- **THEN** `onTextEditing` is called with `にほ` and cursor 2
 
 #### Scenario: Composition ends
 - **WHEN** the user commits or cancels the composition
-- **THEN** an `ETextEditing` with an empty `text` is sent
+- **THEN** `onTextEditing` is called with an empty text
 
 ### Requirement: the candidate window follows the text field
-`hxd.Window.setTextInputArea(x, y, width, height, cursor)` SHALL tell the platform's IME the rectangle, in window coordinates, next to which it places its candidate window, `cursor` being the offset of the text cursor from `x`. On HashLink/SDL it SHALL call `sdl.Window.setTextInputArea` when the SDL library provides it and do nothing otherwise; on other platforms it SHALL do nothing.
+`hxd.Window.setTextInputArea(x, y, width, height, cursor)` SHALL tell the platform's IME the rectangle, in window coordinates, next to which it places its candidate window, `cursor` being the offset of the text cursor from `x`. On HashLink/SDL it SHALL call `sdl.Window.setTextInputArea` when the SDL library provides it, by a typed call that dead code elimination keeps, and do nothing otherwise; on other platforms it SHALL do nothing.
 
 #### Scenario: Library without the call
 - **WHEN** `setTextInputArea` is called with an SDL library that has no `setTextInputArea`
