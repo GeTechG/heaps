@@ -47,6 +47,14 @@ class Window {
 	}
 
 	/**
+		Called each time the text being composed by an input method changes: `text` is the whole composition, `cursor` the cursor
+		(or selection start) in it and `length` the selection length, in code points, -1 when the platform does not give them.
+		An empty `text` ends the composition, committed or cancelled; the committed text arrives as `ETextInput` events.
+	**/
+	public dynamic function onTextEditing( text : String, cursor : Int, length : Int ) : Void {
+	}
+
+	/**
 		An event called when `mouseMode` is changed.
 
 		Note that changing from `Relative(callbackA)` to `Relative(callbackB)` would also cause this event as any other parameter changes.
@@ -121,6 +129,13 @@ class Window {
 	**/
 	public function setCursorPos( x : Int, y : Int, emitEvent : Bool = false ) : Void {
 		throw "Not implemented";
+	}
+
+	/**
+		Tell the input method where the text being edited is, in window coordinates, so that it places its candidate window next to it.
+		`cursor` is the offset of the text cursor from `x`. Does nothing on this platform.
+	**/
+	public function setTextInputArea( x : Int, y : Int, width : Int, height : Int, cursor : Int = 0 ) : Void {
 	}
 
 	public function setCurrent() {

@@ -141,6 +141,8 @@ class Window {
 		element.addEventListener("keydown", onKeyDown);
 		element.addEventListener("keyup", onKeyUp);
 		element.addEventListener("keypress", onKeyPress);
+		element.addEventListener("compositionupdate", onCompositionUpdate);
+		element.addEventListener("compositionend", onCompositionEnd);
 		element.addEventListener("blur", onFocus.bind(false));
 		element.addEventListener("focus", onFocus.bind(true));
 		element.addEventListener("pointerdown", onPointerDown);
@@ -212,6 +214,14 @@ class Window {
 
 	public dynamic function onClose() : Bool {
 		return true;
+	}
+
+	/**
+		Called each time the text being composed by an input method changes: `text` is the whole composition, `cursor` the cursor
+		(or selection start) in it and `length` the selection length, in code points, -1 when the platform does not give them.
+		An empty `text` ends the composition, committed or cancelled; the committed text arrives as `ETextInput` events.
+	**/
+	public dynamic function onTextEditing( text : String, cursor : Int, length : Int ) : Void {
 	}
 
 	public dynamic function onMouseModeChange( from : MouseMode, to : MouseMode ) : Null<MouseMode> {
@@ -325,6 +335,13 @@ class Window {
 				canvas.releasePointerCapture(lastPointerId);
 			} catch(e) {};
 		}
+	}
+
+	/**
+		Tell the input method where the text being edited is, in window coordinates, so that it places its candidate window next to it.
+		`cursor` is the offset of the text cursor from `x`. Does nothing on this platform.
+	**/
+	public function setTextInputArea( x : Int, y : Int, width : Int, height : Int, cursor : Int = 0 ) : Void {
 	}
 
 	public function setCurrent() {
@@ -571,6 +588,18 @@ class Window {
 			e.preventDefault();
 			e.stopPropagation();
 		}
+	}
+
+	// composition events only reach a canvas or the page from an editable element that has the IME input
+	function onCompositionUpdate(e:js.html.CompositionEvent) {
+		onTextEditing(e.data == null ? "" : e.data, -1, -1);
+	}
+
+	function onCompositionEnd(e:js.html.CompositionEvent) {
+		onTextEditing("", -1, -1);
+		if( e.data != null )
+			for( ev in Event.textInputs(e.data, mouseX, mouseY) )
+				event(ev);
 	}
 
 	function onFocus(b: Bool) {
