@@ -142,6 +142,14 @@ class Window {
 		return true;
 	}
 
+	/**
+		Called each time the text being composed by an input method changes: `text` is the whole composition, `cursor` the cursor
+		(or selection start) in it and `length` the selection length, in code points, -1 when the platform does not give them.
+		An empty `text` ends the composition, committed or cancelled; the committed text arrives as `ETextInput` events.
+	**/
+	public dynamic function onTextEditing( text : String, cursor : Int, length : Int ) : Void {
+	}
+
 	public dynamic function onMove() : Void {
 	}
 
@@ -254,6 +262,16 @@ class Window {
 		curMouseX = x;
 		curMouseY = y;
 		if (emitEvent) event(new hxd.Event(EMove, x, y));
+	}
+
+	/**
+		Tell the input method where the text being edited is, in window coordinates, so that it places its candidate window next to it.
+		`cursor` is the offset of the text cursor from `x`. Does nothing with an SDL library without `sdl.Window.setTextInputArea`.
+	**/
+	public function setTextInputArea( x : Int, y : Int, width : Int, height : Int, cursor : Int = 0 ) : Void {
+		#if hlsdl
+		hxd.Event.ifHasField("sdl.Window", "setTextInputArea", window.setTextInputArea(x, y, width, height, cursor), {});
+		#end
 	}
 
 	public function captureMouseEvents(enable: Bool) : Void {
@@ -525,6 +543,12 @@ class Window {
 				onEvent(e);
 			}
 		case TextInput:
+			var text = sdlText(e);
+			if( text != null ) {
+				for( ev in hxd.Event.textInputs(text, mouseX, mouseY) )
+					event(ev);
+				return true;
+			}
 			eh = new Event(ETextInput, mouseX, mouseY);
 			var c = e.keyCode & 0xFF;
 			eh.charCode = if( c < 0x7F )
@@ -607,7 +631,10 @@ class Window {
 		#end
 		default:
 			#if hlsdl
-			onAppEvent(cast e.type);
+			if( (cast e.type : Int) == 10 ) // TextEditing, matched by value: the SDL library may not define it
+				onTextEditing(sdlText(e), e.value, e.reference);
+			else
+				onAppEvent(cast e.type);
 			#end
 		}
 		if( eh != null ) event(eh);
@@ -615,6 +642,11 @@ class Window {
 	}
 
 	#if hlsdl
+	// the UTF-8 text of a TextInput or TextEditing event, null with an SDL library without `sdl.Event.text` (GeTechG/hashlink 588cab2e or later)
+	static function sdlText( e : sdl.Event ) : String {
+		return hxd.Event.ifHasField("sdl.Event", "text", e.text == null ? null : @:privateAccess String.fromUTF8(e.text), null);
+	}
+
 	// SDL application events (hashlink SDL library GeTechG/hashlink 28c215a8 or later), matched by value:
 	// an older library never delivers them and still compiles
 	function onAppEvent( type : Int ) {

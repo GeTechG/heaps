@@ -19,6 +19,7 @@ enum EventKind {
 	ECheck;
 }
 
+@:allow(hxd.Window)
 class Event {
 
 	public var kind : EventKind;
@@ -52,6 +53,24 @@ class Event {
 		case EWheel: ",wheelDelta=" + wheelDelta;
 		case EKeyDown, EKeyUp: ",keyCode=" + keyCode;
 		case ETextInput: ",charCode=" + charCode;
+		}
+	}
+
+	static function textInputs( text : String, x : Float, y : Float ) : Array<Event> {
+		var events = [];
+		for( c in new haxe.iterators.StringIteratorUnicode(text) ) {
+			var e = new Event(ETextInput, x, y);
+			e.charCode = c;
+			events.push(e);
+		}
+		return events;
+	}
+
+	// `expr` if the class `path` has the instance field `field`, `otherwise` if not: code against an API that only some versions of a library have
+	static macro function ifHasField( path : String, field : String, expr : haxe.macro.Expr, otherwise : haxe.macro.Expr ) : haxe.macro.Expr {
+		return switch( haxe.macro.Context.getType(path) ) {
+		case TInst(c, _) if( Lambda.exists(c.get().fields.get(), f -> f.name == field) ): expr;
+		default: otherwise;
 		}
 	}
 
