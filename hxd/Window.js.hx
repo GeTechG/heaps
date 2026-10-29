@@ -92,6 +92,9 @@ class Window {
 	var canLockMouse : Bool = true;
 	// browsers fire composition events only on a focused editable element: created by the first setTextInputArea
 	var textArea : js.html.TextAreaElement;
+	// last character of a commit, until its key is released: WebKit sends a dead key's commit again as a keypress
+	// whose default inserts the key that ended the composition, which then comes as input
+	var committedChar = -1;
 
 	public function new( ?canvas : js.html.CanvasElement, ?globalEvents ) : Void {
 		var customCanvas = canvas != null;
@@ -392,7 +395,7 @@ class Window {
 			ta.addEventListener("focus", onElementFocus.bind(true));
 		}
 		// the key already gave its ETextInput: keep it out of the textarea, or it comes again as input
-		ta.addEventListener("keypress", function(e) e.preventDefault());
+		ta.addEventListener("keypress", function(e:js.html.KeyboardEvent) if( e.charCode != committedChar ) e.preventDefault());
 		ta.addEventListener("input", onTextAreaInput);
 	}
 
@@ -607,6 +610,7 @@ class Window {
 	}
 
 	function onKeyUp(e:js.html.KeyboardEvent) {
+		committedChar = -1;
 		var ev = new Event(EKeyUp, mouseX, mouseY);
 		ev.keyCode = e.keyCode;
 		event(ev);
@@ -637,6 +641,8 @@ class Window {
 	}
 
 	function onKeyPress(e:js.html.KeyboardEvent) {
+		if( e.charCode == committedChar )
+			return;
 		var ev = new Event(ETextInput, mouseX, mouseY);
 		ev.charCode = e.charCode;
 		event(ev);
@@ -654,8 +660,10 @@ class Window {
 	function onCompositionEnd(e:js.html.CompositionEvent) {
 		onTextEditing("", -1, -1);
 		if( e.data != null )
-			for( ev in Event.textInputs(e.data, mouseX, mouseY) )
+			for( ev in Event.textInputs(e.data, mouseX, mouseY) ) {
 				event(ev);
+				committedChar = ev.charCode;
+			}
 		if( textArea != null && e.target == textArea )
 			textArea.value = "";
 	}
