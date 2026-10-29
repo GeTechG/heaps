@@ -90,6 +90,8 @@ class Window {
 	public var discardMouseCaptureEvent : Bool = true;
 	var discardMouseUp : Int = -1;
 	var canLockMouse : Bool = true;
+	// browsers fire composition events only on a focused editable element: created by the first setTextInputArea
+	var textArea : js.html.TextAreaElement;
 
 	public function new( ?canvas : js.html.CanvasElement, ?globalEvents ) : Void {
 		var customCanvas = canvas != null;
@@ -143,8 +145,8 @@ class Window {
 		element.addEventListener("keypress", onKeyPress);
 		element.addEventListener("compositionupdate", onCompositionUpdate);
 		element.addEventListener("compositionend", onCompositionEnd);
-		element.addEventListener("blur", onFocus.bind(false));
-		element.addEventListener("focus", onFocus.bind(true));
+		element.addEventListener("blur", onElementFocus.bind(false));
+		element.addEventListener("focus", onElementFocus.bind(true));
 		element.addEventListener("pointerdown", onPointerDown);
 		element.addEventListener("pointerup", onPointerUp);
 
@@ -201,6 +203,10 @@ class Window {
 
 	public function dispose() {
 		if( inst == this ) inst = null;
+		if( textArea != null ) {
+			textArea.remove();
+			textArea = null;
+		}
 		if ((js.Browser.window:Dynamic).ResizeObserver != null) {
 			if (observer != null) {
 				observer.disconnect();
@@ -339,9 +345,59 @@ class Window {
 
 	/**
 		Tell the input method where the text being edited is, in window coordinates, so that it places its candidate window next to it.
-		`cursor` is the offset of the text cursor from `x`. Does nothing on this platform.
+		`cursor` is the offset of the text cursor from `x`.
+		The first call creates the hidden textarea that receives the input method's text; the focus the canvas gets moves on to it from then on.
 	**/
 	public function setTextInputArea( x : Int, y : Int, width : Int, height : Int, cursor : Int = 0 ) : Void {
+		if( !js.Browser.supported ) return;
+		if( textArea == null ) createTextArea();
+		var pos = canvas.getBoundingClientRect();
+		var r = getPixelRatio();
+		var s = textArea.style;
+		s.left = (pos.left + (x + cursor) / r) + "px";
+		s.top = (pos.top + y / r) + "px";
+		s.width = Math.max(1, (width - cursor) / r) + "px";
+		s.height = s.fontSize = s.lineHeight = Math.max(1, height / r) + "px";
+		var doc = js.Browser.document;
+		var active = doc.activeElement;
+		if( active == canvas || (element == js.Browser.window && (active == null || active == doc.body)) )
+			focusTextArea();
+	}
+
+	function createTextArea() {
+		var ta = textArea = js.Browser.document.createTextAreaElement();
+		for( a in ["autocomplete", "autocorrect", "autocapitalize"] )
+			ta.setAttribute(a, "off");
+		ta.setAttribute("aria-hidden", "true");
+		ta.spellcheck = false;
+		ta.tabIndex = -1;
+		var s = ta.style;
+		s.position = "fixed";
+		s.opacity = "0";
+		s.pointerEvents = "none";
+		s.border = s.padding = s.margin = "0";
+		s.outline = s.resize = "none";
+		s.overflow = "hidden";
+		s.whiteSpace = "pre";
+		s.background = s.color = "transparent";
+		js.Browser.document.body.appendChild(ta);
+		// under globalEvents these bubble to the window, which handles them already
+		if( element != js.Browser.window ) {
+			ta.addEventListener("keydown", onKeyDown);
+			ta.addEventListener("keyup", onKeyUp);
+			ta.addEventListener("keypress", onKeyPress);
+			ta.addEventListener("compositionupdate", onCompositionUpdate);
+			ta.addEventListener("compositionend", onCompositionEnd);
+			ta.addEventListener("blur", onElementFocus.bind(false));
+			ta.addEventListener("focus", onElementFocus.bind(true));
+		}
+		// the key already gave its ETextInput: keep it out of the textarea, or it comes again as input
+		ta.addEventListener("keypress", function(e) e.preventDefault());
+		ta.addEventListener("input", onTextAreaInput);
+	}
+
+	function focusTextArea() {
+		(cast textArea : Dynamic).focus({ preventScroll : true });
 	}
 
 	public function setCurrent() {
@@ -590,7 +646,7 @@ class Window {
 		}
 	}
 
-	// composition events only reach a canvas or the page from an editable element that has the IME input
+	// composition events only come from an editable element that has the focus: the textarea, or a page's own under globalEvents
 	function onCompositionUpdate(e:js.html.CompositionEvent) {
 		onTextEditing(e.data == null ? "" : e.data, -1, -1);
 	}
@@ -600,6 +656,28 @@ class Window {
 		if( e.data != null )
 			for( ev in Event.textInputs(e.data, mouseX, mouseY) )
 				event(ev);
+		if( textArea != null && e.target == textArea )
+			textArea.value = "";
+	}
+
+	// text that comes without a key press or a composition: a touch keyboard, dictation
+	function onTextAreaInput(e:js.html.InputEvent) {
+		if( e.isComposing ) return;
+		var e : Dynamic = e;
+		if( e.inputType == "insertText" && e.data != null )
+			for( ev in Event.textInputs(e.data, mouseX, mouseY) )
+				event(ev);
+		textArea.value = "";
+	}
+
+	// the focus passing between the canvas and the textarea is not the window's
+	function onElementFocus(b: Bool, e: js.html.FocusEvent) {
+		if( b && textArea != null && e.target == canvas )
+			focusTextArea();
+		var other = e.relatedTarget;
+		if( other != null && (other == canvas || other == textArea) )
+			return;
+		onFocus(b);
 	}
 
 	function onFocus(b: Bool) {
