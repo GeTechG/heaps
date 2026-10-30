@@ -1,6 +1,6 @@
 // Run: haxe -cp . -cp tests --main TextInputTest --interp
 // Run (HashLink/SDL, needs a display; with the GeTechG/hashlink SDL library in place of -lib hlsdl it checks the IME path): haxe -cp . -cp tests -lib format -lib hlsdl --main TextInputTest -hl test.hl && hl test.hl
-// hxd.Window sends one ETextInput per code point of a commit and reports the IME composition through onTextEditing.
+// hxd.Window sends one ETextInput per code point of a commit and reports the IME composition through onTextEditing, until stopTextInput and again after startTextInput.
 class TextInputTest {
 
 	static var failures = 0;
@@ -80,6 +80,69 @@ class TextInputTest {
 
 		w.setTextInputArea(10, 20, 200, 24, 5);
 		check("setTextInputArea returns", true);
+
+		sdlStopStart(w, hasText);
+	}
+
+	static function sdlKey( type : Int, keyCode : Int ) {
+		var e = new sdl.Event();
+		e.type = cast type;
+		e.keyCode = keyCode;
+		return e;
+	}
+
+	static function sdlEditing( text : String, cursor : Int ) {
+		var e = sdlEvent(10, text, true);
+		e.value = cursor;
+		e.reference = 0;
+		return e;
+	}
+
+	static function sdlStopStart( w : hxd.Window, hasText : Bool ) {
+		var got = [];
+		w.addEventTarget(e -> got.push(e));
+		var editing = [];
+		w.onTextEditing = (text, cursor, length) -> editing.push(text + "/" + cursor + "/" + length);
+		var commit = hasText ? "26085,26412,35486" : "26085";
+		@:privateAccess hxd.Window.initChars(); // hxd.System does it at startup
+
+		w.stopTextInput();
+		check("stopTextInput without a composition does not call onTextEditing", editing.length == 0);
+		@:privateAccess w.onEvent(sdlEvent(9, "日本語", hasText));
+		check("a TextInput SDL had queued gives no ETextInput while stopped", got.length == 0);
+		@:privateAccess w.onEvent(sdlKey(7, "a".code));
+		@:privateAccess w.onEvent(sdlKey(8, "a".code));
+		check("key events keep coming while stopped", got.length == 2 && got[0].kind == EKeyDown && got[1].kind == EKeyUp && got[0].keyCode == hxd.Key.A && got[1].keyCode == hxd.Key.A);
+
+		got = [];
+		w.startTextInput();
+		@:privateAccess w.onEvent(sdlEvent(9, "日本語", hasText));
+		check("startTextInput restores ETextInput", codes(got) == commit);
+
+		if( hasText ) {
+			w.stopTextInput();
+			@:privateAccess w.onEvent(sdlEditing("にほ", 2));
+			@:privateAccess w.onEvent(sdlEditing("", 0));
+			check("a TextEditing SDL had queued does not call onTextEditing while stopped", editing.length == 0);
+			w.startTextInput();
+			@:privateAccess w.onEvent(sdlEditing("にほ", 2));
+			check("startTextInput restores onTextEditing", editing.join(" ") == "にほ/2/0");
+
+			editing = [];
+			w.stopTextInput();
+			check("a composition cut short ends with an empty onTextEditing", editing.join(" ") == "/0/0");
+			w.stopTextInput();
+			check("a second stopTextInput does not end it again", editing.length == 1);
+			w.startTextInput();
+			@:privateAccess w.onEvent(sdlEditing("", 0));
+
+			editing = [];
+			@:privateAccess w.onEvent(sdlEditing("にほ", 2));
+			@:privateAccess w.onEvent(sdlEditing("", 0));
+			w.stopTextInput();
+			check("stopTextInput after a composition ended does not end it again", editing.join(" ") == "にほ/2/0 /0/0");
+			w.startTextInput();
+		}
 	}
 	#end
 
