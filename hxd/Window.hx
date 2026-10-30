@@ -138,6 +138,19 @@ class Window {
 	public function setTextInputArea( x : Int, y : Int, width : Int, height : Int, cursor : Int = 0 ) : Void {
 	}
 
+	/**
+		Turn text input on again after `stopTextInput`. Does nothing on this platform.
+	**/
+	public function startTextInput() : Void {
+	}
+
+	/**
+		Turn text input off when the game leaves its text field: no `ETextInput` and no composition until `startTextInput`, key events keep coming.
+		Text input is on until this is called. Does nothing on this platform.
+	**/
+	public function stopTextInput() : Void {
+	}
+
 	public function setCurrent() {
 	}
 

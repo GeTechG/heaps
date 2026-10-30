@@ -83,6 +83,8 @@ class Window {
 
 	#if hlsdl
 	var window : sdl.Window;
+	var textInputStopped : Bool = false;
+	var composing : Bool = false;
 	#elseif hldx
 	var window : dx.Window;
 	var _mouseClip : Bool;
@@ -271,6 +273,32 @@ class Window {
 	public function setTextInputArea( x : Int, y : Int, width : Int, height : Int, cursor : Int = 0 ) : Void {
 		#if hlsdl
 		hxd.Event.ifHasField("sdl.Window", "setTextInputArea", window.setTextInputArea(x, y, width, height, cursor), {});
+		#end
+	}
+
+	/**
+		Turn text input on again after `stopTextInput`. Does nothing on DirectX.
+	**/
+	public function startTextInput() : Void {
+		#if hlsdl
+		textInputStopped = false;
+		hxd.Event.ifHasField("sdl.Window", "startTextInput", window.startTextInput(), sdlTextInput(true));
+		#end
+	}
+
+	/**
+		Turn text input off when the game leaves its text field: no `ETextInput` and no composition until `startTextInput`, key events keep coming.
+		A composition in progress ends with an empty `onTextEditing`. Text input is on until this is called.
+		With an SDL library without `sdl.Window.stopTextInput` it applies to all of the library's windows. Does nothing on DirectX.
+	**/
+	public function stopTextInput() : Void {
+		#if hlsdl
+		textInputStopped = true;
+		hxd.Event.ifHasField("sdl.Window", "stopTextInput", window.stopTextInput(), sdlTextInput(false));
+		if( composing ) {
+			composing = false;
+			onTextEditing("", 0, 0);
+		}
 		#end
 	}
 
@@ -543,6 +571,7 @@ class Window {
 				onEvent(e);
 			}
 		case TextInput:
+			if( textInputStopped ) return true; // SDL had it queued already
 			var text = sdlText(e);
 			if( text != null ) {
 				for( ev in hxd.Event.textInputs(text, mouseX, mouseY) )
@@ -631,9 +660,13 @@ class Window {
 		#end
 		default:
 			#if hlsdl
-			if( (cast e.type : Int) == 10 ) // TextEditing, matched by value: the SDL library may not define it
-				onTextEditing(sdlText(e), e.value, e.reference);
-			else
+			if( (cast e.type : Int) == 10 ) { // TextEditing, matched by value: the SDL library may not define it
+				if( !textInputStopped ) {
+					var text = sdlText(e);
+					composing = text != null && text.length > 0;
+					onTextEditing(text, e.value, e.reference);
+				}
+			} else
 				onAppEvent(cast e.type);
 			#end
 		}
@@ -642,6 +675,10 @@ class Window {
 	}
 
 	#if hlsdl
+	// every version of the SDL library has it; it applies to all of its windows
+	@:hlNative("sdl", "text_input") static function sdlTextInput( enable : Bool ) : Void {
+	}
+
 	// the UTF-8 text of a TextInput or TextEditing event, null with an SDL library without `sdl.Event.text` (GeTechG/hashlink 588cab2e or later)
 	static function sdlText( e : sdl.Event ) : String {
 		return hxd.Event.ifHasField("sdl.Event", "text", e.text == null ? null : @:privateAccess String.fromUTF8(e.text), null);

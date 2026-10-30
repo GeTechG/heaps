@@ -90,8 +90,10 @@ class Window {
 	public var discardMouseCaptureEvent : Bool = true;
 	var discardMouseUp : Int = -1;
 	var canLockMouse : Bool = true;
-	// browsers fire composition events only on a focused editable element: created by the first setTextInputArea
+	// browsers fire composition events only on a focused editable element: created by the first setTextInputArea or startTextInput
 	var textArea : js.html.TextAreaElement;
+	var textInputStopped : Bool = false;
+	var composing : Bool = false;
 	// last character of a commit, until its key is released: WebKit sends a dead key's commit again as a keypress
 	// whose default inserts the key that ended the composition, which then comes as input
 	var committedChar = -1;
@@ -349,7 +351,8 @@ class Window {
 	/**
 		Tell the input method where the text being edited is, in window coordinates, so that it places its candidate window next to it.
 		`cursor` is the offset of the text cursor from `x`.
-		The first call creates the hidden textarea that receives the input method's text; the focus the canvas gets moves on to it from then on.
+		The first call creates the hidden textarea that receives the input method's text; the focus the canvas gets moves on to it from then on,
+		unless text input is stopped.
 	**/
 	public function setTextInputArea( x : Int, y : Int, width : Int, height : Int, cursor : Int = 0 ) : Void {
 		if( !js.Browser.supported ) return;
@@ -361,10 +364,45 @@ class Window {
 		s.top = (pos.top + y / r) + "px";
 		s.width = Math.max(1, (width - cursor) / r) + "px";
 		s.height = s.fontSize = s.lineHeight = Math.max(1, height / r) + "px";
+		if( textInputStopped ) return;
 		var doc = js.Browser.document;
 		var active = doc.activeElement;
 		if( active == canvas || (element == js.Browser.window && (active == null || active == doc.body)) )
 			focusTextArea();
+	}
+
+	/**
+		Turn text input on: creates the hidden textarea if it does not exist yet and gives it the focus, unless another element of the page has it.
+		A virtual keyboard opens only for a focus given during a user gesture: call this from the input event that enters the text field.
+	**/
+	public function startTextInput() : Void {
+		if( !js.Browser.supported ) return;
+		textInputStopped = false;
+		if( textArea == null ) createTextArea();
+		var doc = js.Browser.document;
+		var active = doc.activeElement;
+		if( active == null || active == doc.body || active == canvas )
+			focusTextArea();
+	}
+
+	/**
+		Turn text input off when the game leaves its text field: no `ETextInput` and no composition until `startTextInput`, key events keep coming.
+		The hidden textarea gives up the focus, which closes a virtual keyboard. Text input is on until this is called.
+	**/
+	public function stopTextInput() : Void {
+		if( !js.Browser.supported ) return;
+		textInputStopped = true;
+		if( textArea != null && js.Browser.document.activeElement == textArea ) {
+			if( element == js.Browser.window )
+				textArea.blur();
+			else
+				(cast canvas : Dynamic).focus({ preventScroll : true });
+		}
+		// a composition the browser did not end with the focus, or one in a page's own input
+		if( composing ) {
+			composing = false;
+			onTextEditing("", -1, -1);
+		}
 	}
 
 	function createTextArea() {
@@ -643,9 +681,11 @@ class Window {
 	function onKeyPress(e:js.html.KeyboardEvent) {
 		if( e.charCode == committedChar )
 			return;
-		var ev = new Event(ETextInput, mouseX, mouseY);
-		ev.charCode = e.charCode;
-		event(ev);
+		if( !textInputStopped ) {
+			var ev = new Event(ETextInput, mouseX, mouseY);
+			ev.charCode = e.charCode;
+			event(ev);
+		}
 		if( !propagateKeyEvents ) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -654,12 +694,17 @@ class Window {
 
 	// composition events only come from an editable element that has the focus: the textarea, or a page's own under globalEvents
 	function onCompositionUpdate(e:js.html.CompositionEvent) {
+		if( textInputStopped ) return;
+		composing = true;
 		onTextEditing(e.data == null ? "" : e.data, -1, -1);
 	}
 
 	function onCompositionEnd(e:js.html.CompositionEvent) {
-		onTextEditing("", -1, -1);
-		if( e.data != null )
+		if( composing || !textInputStopped )
+			onTextEditing("", -1, -1);
+		composing = false;
+		// a browser commits the textarea's composition when stopTextInput takes the focus away
+		if( e.data != null && (!textInputStopped || e.target == textArea) )
 			for( ev in Event.textInputs(e.data, mouseX, mouseY) ) {
 				event(ev);
 				committedChar = ev.charCode;
@@ -680,7 +725,7 @@ class Window {
 
 	// the focus passing between the canvas and the textarea is not the window's
 	function onElementFocus(b: Bool, e: js.html.FocusEvent) {
-		if( b && textArea != null && e.target == canvas )
+		if( b && textArea != null && !textInputStopped && e.target == canvas )
 			focusTextArea();
 		var other = e.relatedTarget;
 		if( other != null && (other == canvas || other == textArea) )
