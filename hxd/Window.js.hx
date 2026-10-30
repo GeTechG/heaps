@@ -93,6 +93,7 @@ class Window {
 	// browsers fire composition events only on a focused editable element: created by the first setTextInputArea or startTextInput
 	var textArea : js.html.TextAreaElement;
 	var textInputStopped : Bool = false;
+	var composing : Bool = false;
 	// last character of a commit, until its key is released: WebKit sends a dead key's commit again as a keypress
 	// whose default inserts the key that ended the composition, which then comes as input
 	var committedChar = -1;
@@ -391,11 +392,17 @@ class Window {
 	public function stopTextInput() : Void {
 		if( !js.Browser.supported ) return;
 		textInputStopped = true;
-		if( textArea == null || js.Browser.document.activeElement != textArea ) return;
-		if( element == js.Browser.window )
-			textArea.blur();
-		else
-			(cast canvas : Dynamic).focus({ preventScroll : true });
+		if( textArea != null && js.Browser.document.activeElement == textArea ) {
+			if( element == js.Browser.window )
+				textArea.blur();
+			else
+				(cast canvas : Dynamic).focus({ preventScroll : true });
+		}
+		// a composition the browser did not end with the focus, or one in a page's own input
+		if( composing ) {
+			composing = false;
+			onTextEditing("", -1, -1);
+		}
 	}
 
 	function createTextArea() {
@@ -688,11 +695,14 @@ class Window {
 	// composition events only come from an editable element that has the focus: the textarea, or a page's own under globalEvents
 	function onCompositionUpdate(e:js.html.CompositionEvent) {
 		if( textInputStopped ) return;
+		composing = true;
 		onTextEditing(e.data == null ? "" : e.data, -1, -1);
 	}
 
 	function onCompositionEnd(e:js.html.CompositionEvent) {
-		onTextEditing("", -1, -1);
+		if( composing || !textInputStopped )
+			onTextEditing("", -1, -1);
+		composing = false;
 		// a browser commits the textarea's composition when stopTextInput takes the focus away
 		if( e.data != null && (!textInputStopped || e.target == textArea) )
 			for( ev in Event.textInputs(e.data, mouseX, mouseY) ) {
