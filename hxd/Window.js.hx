@@ -150,8 +150,8 @@ class Window {
 		element.addEventListener("keypress", onKeyPress);
 		element.addEventListener("compositionupdate", onCompositionUpdate);
 		element.addEventListener("compositionend", onCompositionEnd);
-		element.addEventListener("blur", onElementFocus.bind(false));
-		element.addEventListener("focus", onElementFocus.bind(true));
+		element.addEventListener("blur", onElementBlur);
+		element.addEventListener("focus", onElementFocused);
 		element.addEventListener("pointerdown", onPointerDown);
 		element.addEventListener("pointerup", onPointerUp);
 
@@ -167,25 +167,11 @@ class Window {
 
 		js.Browser.document.addEventListener("pointerlockchange", onPointerLockChange);
 
-		canvas.addEventListener("contextmenu", function(e){
-			e.stopPropagation();
-			if (e.button == 2) {
-				e.preventDefault();
-			}
-			return false;
-		});
+		canvas.addEventListener("contextmenu", onCanvasContextMenu);
 		if( globalEvents ) {
 			// make first mousedown on canvas trigger event
-			canvas.addEventListener("mousedown", function(e) {
-				onMouseDown(e);
-				e.stopPropagation();
-				e.preventDefault();
-			});
-			element.addEventListener("contextmenu",function(e) {
-				e.stopPropagation();
-				e.preventDefault();
-				return false;
-			});
+			canvas.addEventListener("mousedown", onCanvasMouseDown);
+			element.addEventListener("contextmenu", onGlobalContextMenu);
 		} else {
 			// allow focus
 			if( canvas.getAttribute("tabindex") == null )
@@ -194,6 +180,26 @@ class Window {
 		}
 		curW = this.width;
 		curH = this.height;
+	}
+
+	function onCanvasContextMenu( e : js.html.MouseEvent ) {
+		e.stopPropagation();
+		if (e.button == 2) {
+			e.preventDefault();
+		}
+		return false;
+	}
+
+	function onCanvasMouseDown( e : js.html.MouseEvent ) {
+		onMouseDown(e);
+		e.stopPropagation();
+		e.preventDefault();
+	}
+
+	function onGlobalContextMenu( e : js.html.MouseEvent ) {
+		e.stopPropagation();
+		e.preventDefault();
+		return false;
 	}
 
 	function checkResize() {
@@ -208,12 +214,34 @@ class Window {
 
 	public function dispose() {
 		if( inst == this ) inst = null;
+		if( !js.Browser.supported ) return;
 		if( textArea != null ) {
 			textArea.remove();
 			textArea = null;
 		}
+		element.removeEventListener("mousedown", onMouseDown);
+		element.removeEventListener("mouseup", onMouseUp);
+		element.removeEventListener("mouseleave", onMouseLeave);
+		element.removeEventListener("wheel", onMouseWheel);
+		element.removeEventListener("touchstart", onTouchStart);
+		element.removeEventListener("touchmove", onTouchMove);
+		element.removeEventListener("touchend", onTouchEnd);
+		element.removeEventListener("keydown", onKeyDown);
+		element.removeEventListener("keyup", onKeyUp);
+		element.removeEventListener("keypress", onKeyPress);
 		element.removeEventListener("compositionupdate", onCompositionUpdate);
 		element.removeEventListener("compositionend", onCompositionEnd);
+		element.removeEventListener("blur", onElementBlur);
+		element.removeEventListener("focus", onElementFocused);
+		element.removeEventListener("pointerdown", onPointerDown);
+		element.removeEventListener("pointerup", onPointerUp);
+		element.removeEventListener("contextmenu", onGlobalContextMenu);
+		canvas.removeEventListener("mousemove", onMouseMove);
+		canvas.removeEventListener("mousedown", onCanvasMouseDown);
+		canvas.removeEventListener("contextmenu", onCanvasContextMenu);
+		canvas.removeEventListener("dragover", handleDragAndDropEvent);
+		canvas.removeEventListener("drop", handleDragAndDropEvent);
+		dropTargets.clear();
 		js.Browser.window.removeEventListener("resize", checkResize);
 		js.Browser.window.removeEventListener("mousemove", onMouseMove);
 		js.Browser.document.removeEventListener("pointerlockchange", onPointerLockChange);
@@ -726,6 +754,14 @@ class Window {
 			for( ev in Event.textInputs(e.data, mouseX, mouseY) )
 				event(ev);
 		textArea.value = "";
+	}
+
+	function onElementBlur( e : js.html.FocusEvent ) {
+		onElementFocus(false, e);
+	}
+
+	function onElementFocused( e : js.html.FocusEvent ) {
+		onElementFocus(true, e);
 	}
 
 	// the focus passing between the canvas and the textarea is not the window's
