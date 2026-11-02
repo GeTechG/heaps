@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: a disposed window leaves no listener on the page
-On JS, after `hxd.Window.dispose()` no listener added by that window SHALL remain on its canvas, on `window` or on `document`, whichever of the default canvas, a custom canvas or `globalEvents` it was created with. This covers the listeners of the constructor and those of `addDragAndDropTarget`. A disposed window SHALL receive no further DOM event and SHALL send nothing to its event targets.
+On JS, after `hxd.Window.dispose()` no listener added by that window SHALL remain on its canvas, on `window` or on `document`, whichever of the default canvas, a custom canvas or `globalEvents` it was created with. This covers the listeners of the constructor and those of `addDragAndDropTarget`. An event reaching the canvas, `window` or `document` after that SHALL send nothing to the window's event targets. The text input element is removed from the page, as `text-input` states, and its listeners go with it.
 
 #### Scenario: Global events
 - **GIVEN** a window created with `globalEvents`
