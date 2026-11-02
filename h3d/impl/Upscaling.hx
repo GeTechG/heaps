@@ -1050,7 +1050,7 @@ class DX12DlssBackend extends UpscalingBackend {
 				r.type = tagTypes[i];
 				r.state = t.t.state;
 				r.lifecycle = DLSSResourceLifecycle.VALID_UNTIL_PRESENT;
-				t.lastFrame = driver.frameCount;
+				driver.markUsed(t);
 			}
 			Dlss.setTagForFrame(frameToken, resources, count, cmd);
 		}
@@ -1379,7 +1379,9 @@ class DX12FsrBackend extends UpscalingBackend {
 
 	override function dispose() {
 		if( proxy != null ) {
+			driver.waitGpu();
 			destroyFgContext();
+			Fsr.waitForPresents();
 			Fsr.destroySwapChainContext();
 			var swapChain = driver.swapChain;
 			driver.setSwapChain(null);
@@ -1548,10 +1550,10 @@ class DX12FsrBackend extends UpscalingBackend {
 			lastResult = res;
 		}
 
-		color.lastFrame = driver.frameCount;
-		depth.lastFrame = driver.frameCount;
-		motionVectors.lastFrame = driver.frameCount;
-		output.lastFrame = driver.frameCount;
+		driver.markUsed(color);
+		driver.markUsed(depth);
+		driver.markUsed(motionVectors);
+		driver.markUsed(output);
 	}
 
 	override function releaseUpscaler() {
@@ -1729,8 +1731,8 @@ class DX12FsrBackend extends UpscalingBackend {
 		driver.endExternalCommands();
 		fgPreparedFrame = fgFrameId;
 
-		depth.lastFrame = driver.frameCount;
-		motionVectors.lastFrame = driver.frameCount;
+		driver.markUsed(depth);
+		driver.markUsed(motionVectors);
 	}
 
 	function finishFrameGen() {

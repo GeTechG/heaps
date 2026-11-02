@@ -1,10 +1,14 @@
 package hxd.fmt.pak;
 import hxd.fmt.pak.Data;
 
+typedef BuildFileEntry = { path : String, size : Int, checksum : Int };
+
 class Build {
 
 	var fs : hxd.fs.LocalFileSystem;
-	var out : { bytes : Array<haxe.io.Bytes>, size : Float };
+	var out : { entries : Array<BuildFileEntry>, size : Float };
+	var dedupEntries : Map<String, { path : String, pos : Float }>;
+	var dedupSize : Float;
 	var configuration : String;
 	var nextPath : String;
 
@@ -17,6 +21,7 @@ class Build {
 	public var outPrefix : String;
 	public var align : Int = 0;
 	public var pakDiff = false;
+	public var dedup = false;
 	public var checkJPG = false;
 	public var checkOGG = false;
 	public var whitelist = true;
@@ -29,6 +34,25 @@ class Build {
 		var ret = Sys.command(cmd, args);
 		if( ret != 0 )
 			throw cmd + " has failed with exit code " + ret;
+	}
+
+	// taking the modulos once per block : 3800 bytes keep a2 below 2^31
+	static function fastAdler32( b : haxe.io.Bytes ) : Int {
+		var a1 = 1, a2 = 0, p = 0, len = b.length;
+		#if hl
+		var b : hl.Bytes = @:privateAccess b.b;
+		#end
+		while( p < len ) {
+			var end = p + 3800;
+			if( end > len ) end = len;
+			while( p < end ) {
+				a1 += #if hl b[p++] #else b.get(p++) #end;
+				a2 += a1;
+			}
+			a1 %= 65521;
+			a2 %= 65521;
+		}
+		return (a2 << 16) | a1;
 	}
 
 	function buildRec( path : String ) {
@@ -91,17 +115,25 @@ class Build {
 			var filePath = fs.getAbsolutePath(entry);
 			var data = sys.io.File.getBytes(filePath);
 
-			switch( ext ) {
-			case "wav", "ogg" if( checkOGG ):
-				var snd = new hxd.snd.OggData(sys.io.File.getBytes(filePath));
-				if( snd.samples == 0 )
-					Sys.println("\t*** ERROR *** " + path + " has 0 samples");
+			if( checkOGG && (ext == "wav" || ext == "ogg") && new hxd.snd.OggData(data).samples == 0 ) {
+				Sys.println("\t*** ERROR *** " + path + " has 0 samples");
 			}
 
-			f.dataPosition = pakDiff ? out.bytes.length : out.size;
 			f.dataSize = data.length;
-			f.checksum = haxe.crypto.Adler32.make(data);
-			out.bytes.push(data);
+			f.checksum = fastAdler32(data);
+			if( dedup && !pakDiff ) {
+				var key = f.checksum + "_" + f.dataSize;
+				var prev = dedupEntries.get(key);
+				if( prev == null )
+					dedupEntries.set(key, { path : filePath, pos : out.size });
+				else if( sys.io.File.getBytes(prev.path).compare(data) == 0 ) {
+					f.dataPosition = prev.pos;
+					dedupSize += f.dataSize;
+					return f;
+				}
+			}
+			f.dataPosition = pakDiff ? out.entries.length : out.size;
+			out.entries.push({ path : filePath, size : f.dataSize, checksum : f.checksum });
 			out.size += data.length;
 			if (align > 1)
 				out.size += align - data.length % align;
@@ -133,7 +165,7 @@ class Build {
 		return root.checksum == old.checksum;
 	}
 
-	public static function rebuild( pak : Data, bytes : Array<haxe.io.Bytes> ) {
+	public static function rebuild( pak : Data, entries : Array<BuildFileEntry> ) : Array<BuildFileEntry> {
 		var size = 0;
 		function calcRec(f:File) {
 			if( f.isDirectory ) {
@@ -150,7 +182,7 @@ class Build {
 				for( c in f.content )
 					writeRec(c);
 			} else {
-				out.push(bytes[Std.int(f.dataPosition)]);
+				out.push(entries[Std.int(f.dataPosition)]);
 				f.dataPosition = pos;
 				pos += f.dataSize;
 			}
@@ -185,6 +217,26 @@ class Build {
 		printRec(pak.root, 0, "");
 	}
 
+	// The pak already has this exact header : same files, sizes and checksums, and its length shows the data is complete.
+	// Opened without sys.FileSystem.exists, which fails on files over 2GB with HashLink
+	function isUpToDate( file : String, pak : Data ) {
+		pak.dataSize = Writer.getDataSize([for( e in out.entries ) e.size], align);
+		var expected = new haxe.io.BytesOutput();
+		new Writer(expected, align).writeHeader(pak);
+		var expected = expected.getBytes();
+		var i = try sys.io.File.read(file) catch( e : Dynamic ) return false;
+		var upToDate = false;
+		try {
+			var current = i.read(expected.length);
+			if( current.compare(expected) == 0 ) {
+				FileSystem.FileSeek.seek(i, 0, SeekEnd);
+				upToDate = FileSystem.FileSeek.tell(i) == expected.length + out.size;
+			}
+		} catch( e : Dynamic ) {}
+		i.close();
+		return upToDate;
+	}
+
 	public static dynamic function onInit( b : Build ) {}
 
 	function makePak() {
@@ -197,9 +249,13 @@ class Build {
 		onInit(this);
 
 		var pak = new Data();
-		out = { bytes : [], size : 0 };
+		out = { entries : [], size : 0 };
+		dedupEntries = [];
+		dedupSize = 0;
 		pak.version = 0;
 		pak.root = buildRec("");
+		if( dedupSize > 0 )
+			Sys.println("Deduplicated " + Math.round(dedupSize / (1024 * 1024)) + "Mb");
 
 		if( pakDiff ) {
 			var id = 0;
@@ -217,14 +273,37 @@ class Build {
 					return;
 				}
 			}
-			out.bytes = rebuild(pak, out.bytes);
+			out.entries = rebuild(pak, out.entries);
 		}
 
 		var outFile = outPrefix + ".pak";
+		if( !pakDiff && isUpToDate(outFile, pak) ) {
+			Sys.println(outFile + " is up to date");
+			printSize(pak, infoDepth < 0 ? 1 : infoDepth);
+			return;
+		}
 		Sys.println("Writing "+outFile);
-		var f = sys.io.File.write(outFile);
-		new Writer(f, align).write(pak, null, out.bytes);
+		var tmpFile = outFile + ".tmp";
+		var f = sys.io.File.write(tmpFile);
+		try {
+			new Writer(f, align).writeStream(pak, [for( e in out.entries ) e.size], function(i) {
+				#if !dataOnly
+				hxd.System.timeoutTick();
+				#end
+				var e = out.entries[i];
+				var data = sys.io.File.getBytes(e.path);
+				if( data.length != e.size || fastAdler32(data) != e.checksum )
+					throw e.path + " changed while building the pak";
+				return data;
+			});
+		} catch( err : Dynamic ) {
+			f.close();
+			try sys.FileSystem.deleteFile(tmpFile) catch( e : Dynamic ) {}
+			throw err;
+		}
 		f.close();
+		try sys.FileSystem.deleteFile(outFile) catch( e : Dynamic ) {}
+		sys.FileSystem.rename(tmpFile, outFile);
 		printSize(pak, infoDepth < 0 ? 1 : infoDepth);
 	}
 
@@ -285,6 +364,8 @@ class Build {
 				b.align = Std.parseInt(args.shift());
 			case "-diff":
 				b.pakDiff = true;
+			case "-dedup":
+				b.dedup = true;
 			case "-res" if( args.length > 0 ):
 				b.resPath = args.shift();
 			case "-out" if( args.length > 0 ):

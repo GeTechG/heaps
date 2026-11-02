@@ -212,6 +212,11 @@ class Window {
 			textArea.remove();
 			textArea = null;
 		}
+		element.removeEventListener("compositionupdate", onCompositionUpdate);
+		element.removeEventListener("compositionend", onCompositionEnd);
+		js.Browser.window.removeEventListener("resize", checkResize);
+		js.Browser.window.removeEventListener("mousemove", onMouseMove);
+		js.Browser.document.removeEventListener("pointerlockchange", onPointerLockChange);
 		if ((js.Browser.window:Dynamic).ResizeObserver != null) {
 			if (observer != null) {
 				observer.disconnect();
