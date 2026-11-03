@@ -25,11 +25,18 @@ On a native target, when the context's `GL_VERSION` string reports OpenGL ES, `h
 - **THEN** seamless cube maps are enabled, the LOD bias is set and depth clamp is available
 
 ### Requirement: extension state on a native OpenGL ES context follows the extension list
-On a native OpenGL ES context `h3d.impl.GlDriver` SHALL use state that OpenGL ES defines only through an extension when, and only when, the context lists that extension. Where the SDL binding has an extension query (hlsdl 1.15.0 or later) the driver SHALL ask it once, when the driver is created, with the `GL_`-prefixed name:
-- `GL_EXT_texture_filter_anisotropic`: without it the `TEXTURE_MAX_ANISOTROPY_EXT` texture parameter SHALL NOT be set.
-- `GL_EXT_depth_clamp`: with it depth clamp SHALL be available — `hasFeature(DepthClamp)` is true, and `setDepthClamp` and the pass `depthClamp` bit enable or disable `DEPTH_CLAMP`; without it `hasFeature(DepthClamp)` SHALL be false and no `DEPTH_CLAMP` state change SHALL be issued.
+On a native OpenGL ES context `h3d.impl.GlDriver` SHALL use state that OpenGL ES defines only through an extension when, and only when, the context lists that extension. Where the SDL binding has an extension query (hlsdl 1.15.0 or later) the driver SHALL ask it once, when the driver is created, with the `GL_`-prefixed name. On a desktop OpenGL context the anisotropy parameter and depth clamp SHALL be used without a query.
 
-With an older hlsdl, which has no extension query, the driver SHALL set the anisotropy parameter and SHALL report depth clamp as unsupported on OpenGL ES. On a desktop OpenGL context the anisotropy parameter and depth clamp SHALL be used without a query.
+#### Scenario: Extensions are queried once
+- **WHEN** textures are bound and passes drawn after the driver is created
+- **THEN** the extension list is not queried again
+
+#### Scenario: Desktop OpenGL
+- **WHEN** the driver runs on a desktop OpenGL context
+- **THEN** the anisotropy parameter is set and depth clamp is available
+
+### Requirement: anisotropic filtering on OpenGL ES follows GL_EXT_texture_filter_anisotropic
+On a native OpenGL ES context whose extension list was queried, `h3d.impl.GlDriver` SHALL set the `TEXTURE_MAX_ANISOTROPY_EXT` texture parameter only when the context lists `GL_EXT_texture_filter_anisotropic`.
 
 #### Scenario: OpenGL ES without anisotropic filtering
 - **WHEN** a texture is bound for drawing on an OpenGL ES context that does not list `GL_EXT_texture_filter_anisotropic`
@@ -39,17 +46,23 @@ With an older hlsdl, which has no extension query, the driver SHALL set the anis
 - **WHEN** a texture with an anisotropic filter is bound on an OpenGL ES context that lists `GL_EXT_texture_filter_anisotropic`
 - **THEN** `TEXTURE_MAX_ANISOTROPY_EXT` is set to the texture's `anisotropicMaxLevel`
 
+### Requirement: depth clamp on OpenGL ES follows GL_EXT_depth_clamp
+On a native OpenGL ES context whose extension list was queried and lists `GL_EXT_depth_clamp`, `hasFeature(DepthClamp)` SHALL be true, and `setDepthClamp` and the pass `depthClamp` bit SHALL enable or disable `DEPTH_CLAMP`. Without that extension `hasFeature(DepthClamp)` SHALL be false and no `DEPTH_CLAMP` state change SHALL be issued.
+
 #### Scenario: OpenGL ES with depth clamp
 - **WHEN** `setDepthClamp(true)` is called on an OpenGL ES context that lists `GL_EXT_depth_clamp`
 - **THEN** `DEPTH_CLAMP` is enabled and `hasFeature(DepthClamp)` is true
 
-#### Scenario: Extensions are queried once
-- **WHEN** textures are bound and passes drawn after the driver is created
-- **THEN** the extension list is not queried again
+#### Scenario: OpenGL ES without depth clamp
+- **WHEN** a pass with `depthClamp` is drawn on an OpenGL ES context that does not list `GL_EXT_depth_clamp`
+- **THEN** no `DEPTH_CLAMP` state change is issued and `hasFeature(DepthClamp)` is false
 
-#### Scenario: Desktop OpenGL
-- **WHEN** the driver runs on a desktop OpenGL context
-- **THEN** the anisotropy parameter is set and depth clamp is available
+### Requirement: an hlsdl without the extension query
+With an hlsdl older than 1.15.0, which has no extension query, `h3d.impl.GlDriver` on OpenGL ES SHALL set the anisotropy parameter and SHALL report depth clamp as unsupported.
+
+#### Scenario: OpenGL ES with an older hlsdl
+- **WHEN** the driver runs on an OpenGL ES context with an hlsdl that has no extension query
+- **THEN** a texture with an anisotropic filter gets `TEXTURE_MAX_ANISOTROPY_EXT`, and `hasFeature(DepthClamp)` is false
 
 ### Requirement: a uniform array upload names the array's own element count
 On a native target, when `h3d.impl.GlDriver` uploads the globals or the params of a shader, the count it passes to `glUniform4fv` SHALL be the number of `vec4` in the uniform array — the shader's `globalsSize` or `paramsSize` — and the data it passes SHALL hold that many `vec4`. It SHALL NOT pass the number of floats.

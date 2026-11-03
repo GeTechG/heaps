@@ -17,7 +17,7 @@ When the platform commits text, `hxd.Window` SHALL send one `ETextInput` event p
 - **THEN** two `ETextInput` events are sent, with `charCode` 0x61 then 0x1F600
 
 ### Requirement: the composition reaches the game
-While an IME composes text, `hxd.Window` SHALL call its dynamic `onTextEditing(text, cursor, length)` each time the composition changes, with the whole composition in `text`, the cursor or selection start in `cursor` and the selection length in `length` (code points; -1 when the platform does not give one). When the composition ends, committed or cancelled, it SHALL be called with an empty `text`. The composition SHALL NOT be sent as an `hxd.Event`, so that exhaustive switches over `hxd.EventKind` keep compiling. On HashLink/SDL these come from SDL's `TextEditing` event, matched by its numeric value (10) so that the sources build with an SDL library that does not define it. On JS they come from `compositionupdate` and `compositionend` on the window's event element or on its text input element (see *the window owns an editable element on JS*); `compositionend` SHALL also send the committed text as `ETextInput` events.
+While an IME composes text, `hxd.Window` SHALL call its dynamic `onTextEditing(text, cursor, length)` each time the composition changes, with the whole composition in `text`, the cursor or selection start in `cursor` and the selection length in `length` (code points; -1 when the platform does not give one). When the composition ends, committed or cancelled, it SHALL be called with an empty `text`. The composition SHALL NOT be sent as an `hxd.Event`.
 
 #### Scenario: Composing
 - **WHEN** the IME shows `にほ` with the cursor after it
@@ -27,8 +27,23 @@ While an IME composes text, `hxd.Window` SHALL call its dynamic `onTextEditing(t
 - **WHEN** the user commits or cancels the composition
 - **THEN** `onTextEditing` is called with an empty text
 
+#### Scenario: Exhaustive switch over the event kinds
+- **WHEN** a game switches exhaustively over `hxd.EventKind`
+- **THEN** it compiles as before: the composition added no event kind
+
+### Requirement: where the composition comes from
+On HashLink/SDL the composition SHALL come from SDL's `TextEditing` event, matched by its numeric value (10) so that the sources build with an SDL library that does not define it. On JS it SHALL come from `compositionupdate` and `compositionend` on the window's event element or on its text input element (see *the window owns an editable element on JS*); `compositionend` SHALL also send the committed text as `ETextInput` events.
+
+#### Scenario: SDL library without TextEditing
+- **WHEN** the sources are built with an SDL library that does not define `TextEditing`
+- **THEN** they compile, and an event of type 10 still reaches `onTextEditing`
+
+#### Scenario: Commit on JS
+- **WHEN** a `compositionend` with the data `日本` reaches the canvas
+- **THEN** `onTextEditing` is called with an empty text, and two `ETextInput` events are sent, `日` then `本`
+
 ### Requirement: the candidate window follows the text field
-`hxd.Window.setTextInputArea(x, y, width, height, cursor)` SHALL tell the platform's IME the rectangle, in window coordinates, next to which it places its candidate window, `cursor` being the offset of the text cursor from `x`. On HashLink/SDL it SHALL call `sdl.Window.setTextInputArea` when the SDL library provides it, by a typed call that dead code elimination keeps, and do nothing otherwise. On JS it SHALL place the window's text input element over that rectangle of the canvas, its left edge at `x + cursor`. On other platforms it SHALL do nothing.
+`hxd.Window.setTextInputArea(x, y, width, height, cursor)` SHALL tell the platform's IME the rectangle, in window coordinates, next to which it places its candidate window, `cursor` being the offset of the text cursor from `x`. On HashLink/SDL it SHALL call `sdl.Window.setTextInputArea` when the SDL library provides it, by a typed call that dead code elimination keeps. On JS it SHALL place the window's text input element over that rectangle of the canvas, its left edge at `x + cursor`.
 
 #### Scenario: Library without the call
 - **WHEN** `setTextInputArea` is called with an SDL library that has no `setTextInputArea`
@@ -38,8 +53,12 @@ While an IME composes text, `hxd.Window` SHALL call its dynamic `onTextEditing(t
 - **WHEN** `setTextInputArea(100, 40, 200, 20, 30)` is called on JS with a device pixel ratio of 1
 - **THEN** the text input element's top-left corner is 130, 40 CSS pixels from the canvas' top-left corner
 
+#### Scenario: Other platforms
+- **WHEN** `setTextInputArea` is called on a platform other than HashLink/SDL and JS
+- **THEN** nothing happens
+
 ### Requirement: the window owns an editable element on JS
-Browsers fire composition events only on a focused editable element, so on JS `hxd.Window` SHALL create a hidden `<textarea>`, its text input element, on the first call to `setTextInputArea` or `startTextInput`, and not before: a game that calls neither SHALL behave as without it. From then on, unless text input is stopped, the focus the canvas receives SHALL move on to the text input element, and focus passing between the canvas and the text input element SHALL send neither `EFocus` nor `EFocusLost`; under `globalEvents`, `setTextInputArea` SHALL focus it only when no other element has the focus. While text input is stopped, `setTextInputArea` SHALL only place it. Its key, composition, focus and blur events SHALL be handled as the canvas' are. Text it receives as an `input` of type `insertText` outside a composition SHALL be sent as one `ETextInput` per code point; a key typed on a keyboard SHALL give one `ETextInput`, not two. `dispose()` SHALL remove it.
+Browsers fire composition events only on a focused editable element, so on JS `hxd.Window` SHALL create a hidden `<textarea>`, its text input element, on the first call to `setTextInputArea` or `startTextInput`, and not before: a game that calls neither SHALL behave as without it. `dispose()` SHALL remove it.
 
 #### Scenario: IME on the default canvas
 - **WHEN** the game has called `setTextInputArea`, the canvas has the focus and an IME composes `にほん` then commits `日本`
@@ -49,6 +68,13 @@ Browsers fire composition events only on a focused editable element, so on JS `h
 - **WHEN** the game calls neither `setTextInputArea` nor `startTextInput`
 - **THEN** no element is added to the page and the canvas keeps the focus
 
+#### Scenario: Disposed
+- **WHEN** a window that created its text input element is disposed
+- **THEN** the element is no longer in the page
+
+### Requirement: the text input element takes the canvas' focus on JS
+Once the text input element exists, unless text input is stopped, the focus the canvas receives SHALL move on to it, and focus passing between the canvas and the text input element SHALL send neither `EFocus` nor `EFocusLost`. Under `globalEvents`, `setTextInputArea` SHALL focus it only when no other element has the focus. While text input is stopped, `setTextInputArea` SHALL only place it.
+
 #### Scenario: Clicking the canvas
 - **WHEN** the text input element has the focus and the user clicks the canvas
 - **THEN** the focus returns to the text input element and no `EFocusLost` is sent
@@ -57,12 +83,38 @@ Browsers fire composition events only on a focused editable element, so on JS `h
 - **WHEN** the game has called `stopTextInput` and the canvas has the focus and the game calls `setTextInputArea`
 - **THEN** the text input element is placed over the rectangle and the canvas keeps the focus
 
+#### Scenario: Global events and a page's own input
+- **WHEN** the window was created with `globalEvents`, an input element of the page has the focus, and the game calls `setTextInputArea`
+- **THEN** that input keeps the focus
+
+### Requirement: the text input element's events are the canvas' events on JS
+The key, composition, focus and blur events of the text input element SHALL be handled as the canvas' are. Text it receives as an `input` of type `insertText` outside a composition SHALL be sent as one `ETextInput` per code point; a key typed on a keyboard SHALL give one `ETextInput`, not two.
+
+#### Scenario: Inserted text
+- **WHEN** the text input element receives an `input` of type `insertText` with the data `ab` outside a composition
+- **THEN** two `ETextInput` events are sent, `a` then `b`
+
+#### Scenario: Typed key
+- **WHEN** the text input element has the focus and the user types `a` on a keyboard
+- **THEN** exactly one `ETextInput` with `a` is sent
+
 ### Requirement: a game can stop and restart text input
-`hxd.Window.stopTextInput()` SHALL turn text input off and `hxd.Window.startTextInput()` SHALL turn it back on; text input SHALL be on until `stopTextInput` is called. While it is off, the window SHALL send no `ETextInput` and SHALL NOT call `onTextEditing`, except to end a composition, and it SHALL keep sending `EKeyDown` and `EKeyUp`. A composition in progress when `stopTextInput` is called SHALL end with a call to `onTextEditing` with an empty text; on JS the browser may commit it first, and that commit SHALL still be sent. On HashLink/SDL they SHALL call `sdl.Window.stopTextInput` and `sdl.Window.startTextInput` when the SDL library provides them, by a typed call that dead code elimination keeps, and the library's `text_input` primitive otherwise. On JS, `stopTextInput` SHALL move the focus from the text input element to the canvas, or remove it under `globalEvents`, and `startTextInput` SHALL create the text input element if it does not exist and focus it unless another element of the page has the focus. On other platforms both SHALL do nothing.
+`hxd.Window.stopTextInput()` SHALL turn text input off and `hxd.Window.startTextInput()` SHALL turn it back on; text input SHALL be on until `stopTextInput` is called. While it is off, the window SHALL send no `ETextInput` and SHALL NOT call `onTextEditing`, except to end a composition, and it SHALL keep sending `EKeyDown` and `EKeyUp`. On platforms other than HashLink/SDL and JS both SHALL do nothing.
 
 #### Scenario: Never called
 - **WHEN** the game calls neither `stopTextInput` nor `startTextInput`
 - **THEN** text input behaves as if they did not exist
+
+#### Scenario: Composition cut short on SDL
+- **WHEN** the IME shows `にほ` and the game calls `stopTextInput`
+- **THEN** `onTextEditing` is called with an empty text
+
+#### Scenario: Composition committed by the browser on JS
+- **WHEN** an IME composes on JS, the game calls `stopTextInput`, and the browser commits the composition
+- **THEN** the committed text is sent as `ETextInput` and `onTextEditing` is called with an empty text
+
+### Requirement: stopping and restarting text input on HashLink/SDL
+On HashLink/SDL, `stopTextInput` and `startTextInput` SHALL call `sdl.Window.stopTextInput` and `sdl.Window.startTextInput` when the SDL library provides them, by a typed call that dead code elimination keeps, and the library's `text_input` primitive otherwise.
 
 #### Scenario: Stopped on SDL
 - **WHEN** the game has called `stopTextInput` and SDL delivers a `TextInput` event it had already queued
@@ -72,9 +124,8 @@ Browsers fire composition events only on a focused editable element, so on JS `h
 - **WHEN** the game has called `stopTextInput`, then `startTextInput`, and SDL delivers a `TextInput` event
 - **THEN** its `ETextInput` events are sent
 
-#### Scenario: Composition cut short on SDL
-- **WHEN** the IME shows `にほ` and the game calls `stopTextInput`
-- **THEN** `onTextEditing` is called with an empty text
+### Requirement: stopping and restarting text input on JS
+On JS, `stopTextInput` SHALL move the focus from the text input element to the canvas, or remove it under `globalEvents`, and `startTextInput` SHALL create the text input element if it does not exist and focus it unless another element of the page has the focus.
 
 #### Scenario: Leaving the text field on JS
 - **WHEN** the text input element has the focus and the game calls `stopTextInput`

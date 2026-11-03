@@ -6,7 +6,7 @@ How a HashLink/SDL application learns that it went to the background and came ba
 ## Requirements
 
 ### Requirement: background and foreground on HashLink/SDL
-On HashLink with the SDL library, `hxd.System.isInBackground` SHALL be `true` from SDL's `AppWillEnterBackground` or `AppDidEnterBackground`, whichever comes first, until SDL's `AppDidEnterForeground`, and `false` otherwise. On each change `hxd.System` SHALL call every listener added with `addBackgroundListener` and not removed with `removeBackgroundListener`, in the order they were added, with the new value. A repeated background or foreground event SHALL NOT call them again. Losing focus or minimizing a window SHALL NOT change `isInBackground`. The events SHALL be matched by their numeric values (602, 603, 605), so the sources build with an SDL library that does not define them.
+On HashLink with the SDL library, `hxd.System.isInBackground` SHALL be `true` from SDL's `AppWillEnterBackground` or `AppDidEnterBackground`, whichever comes first, until SDL's `AppDidEnterForeground`, and `false` otherwise. Losing focus or minimizing a window SHALL NOT change `isInBackground`. The events SHALL be matched by their numeric values (602, 603, 605), so the sources build with an SDL library that does not define them.
 
 #### Scenario: HOME on Android
 - **WHEN** the user presses HOME
@@ -19,6 +19,21 @@ On HashLink with the SDL library, `hxd.System.isInBackground` SHALL be `true` fr
 #### Scenario: Notification shade
 - **WHEN** the window only loses focus
 - **THEN** `EFocusLost` is sent and `isInBackground` stays `false`
+
+#### Scenario: SDL library without the events
+- **WHEN** the sources are built with an SDL library that does not define `AppWillEnterBackground`, `AppDidEnterBackground` or `AppDidEnterForeground`
+- **THEN** they compile, and the events are still recognized by their values 602, 603 and 605
+
+### Requirement: background listeners are called on each change
+On each change of `hxd.System.isInBackground` on HashLink/SDL, `hxd.System` SHALL call every listener added with `addBackgroundListener` and not removed with `removeBackgroundListener`, in the order they were added, with the new value. A repeated background or foreground event SHALL NOT call them again.
+
+#### Scenario: Both background events
+- **WHEN** SDL sends `AppWillEnterBackground` and then `AppDidEnterBackground`
+- **THEN** each listener is called once, with `true`
+
+#### Scenario: Order and removal
+- **WHEN** listeners `a`, `b` and `c` are added, `b` is removed, and the application goes to the background
+- **THEN** `a` is called, then `c`, and `b` is not called
 
 ### Requirement: the main loop in the background
 While `isInBackground` is `true` the HashLink main loop SHALL keep handling events and the event loop, SHALL NOT call the loop function nor present a frame, and SHALL sleep between iterations. When the application comes back, `hxd.Timer.skip()` SHALL be called before the loop function runs again.
