@@ -7,7 +7,7 @@
 - [ ] 2.1 Rewrite the 15 requirements longer than 500 characters (app-lifecycle, gamepad-input, gl-context-reset, gl-driver-gles, h2d-text, scene-viewport, sound-manager, sound-pan, sound-reverb ×2, text-input ×4, window-dispose) without changing behaviour; check: `openspec validate --specs --strict` passes
 
 ## 3. CI check
-- [ ] 3.1 Write `.github/scripts/check-openspec.sh`: pin format, strict validation, no `TBD` Purpose, `.openspec.yaml` in every active change, skills' `generatedBy` = pin, no unticked non-`[human]` archived task; check: it passes on the branch and fails on each defect planted in a scratch copy
+- [ ] 3.1 Write `openspec/check.sh`: pin format, strict validation, no `TBD` Purpose, `.openspec.yaml` in every active change, skills' `generatedBy` = pin, no unticked non-`[human]` archived task; check: it passes on the branch and fails on each defect planted in a scratch copy
 - [ ] 3.2 Add the `openspec` job to `.github/workflows/ci.yml` running the script with the pinned CLI via `npm exec`; check: the job is green on the pushed branch
 
 ## 4. Rules and docs
