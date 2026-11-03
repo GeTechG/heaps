@@ -31,8 +31,8 @@ The energy of each part of the impulse response SHALL equal the square of its ga
 - **THEN** the energy of its early reflections is the square of `reflections · room` and that of its tail, before `roomHF`, the square of `reverb · room`, both as amplitudes
 
 #### Scenario: Density
-- **WHEN** two responses differ only by a higher `density`
-- **THEN** the one with the higher `density` has more early reflections
+- **WHEN** two responses differ only by `density`, one at its minimum and one at its maximum
+- **THEN** the one at the maximum has more early reflections
 
 ### Requirement: the impulse response is regenerated when its fields change
 The impulse response SHALL be regenerated when one of the fields it is generated from changes, and SHALL NOT be when only `wetDryMix` changes.

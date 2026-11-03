@@ -105,6 +105,13 @@ The key, composition, focus and blur events of the text input element SHALL be h
 - **WHEN** the game calls neither `stopTextInput` nor `startTextInput`
 - **THEN** text input behaves as if they did not exist
 
+### Requirement: stopping text input ends the composition
+A composition in progress when `stopTextInput` is called SHALL end with a call to `onTextEditing` with an empty text. On JS the browser may commit it first, and that commit SHALL still be sent.
+
+#### Scenario: Composition cut short on JS
+- **WHEN** an IME composes on JS and the game calls `stopTextInput` without the browser committing the composition
+- **THEN** `onTextEditing` is called with an empty text and no `ETextInput` is sent
+
 #### Scenario: Composition cut short on SDL
 - **WHEN** the IME shows `にほ` and the game calls `stopTextInput`
 - **THEN** `onTextEditing` is called with an empty text

@@ -10,7 +10,7 @@ export OPENSPEC_TELEMETRY=0 DO_NOT_TRACK=1 OPENSPEC_NO_UPDATE_CHECK=1
 bad=0
 fail() { echo "::error::$*"; bad=1; }
 
-[[ $(wc -l < openspec/cli.pin) == 1 && $(<openspec/cli.pin) =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+[[ $(wc -l < openspec/cli.pin) -eq 1 && $(<openspec/cli.pin) =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
   || { echo "::error::openspec/cli.pin must be one MAJOR.MINOR.PATCH line"; exit 1; }
 pin=$(<openspec/cli.pin)
 
