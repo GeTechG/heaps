@@ -13,15 +13,37 @@ On the WebAudio driver `hxd.snd.effect.Reverb`, added to a channel or its channe
 - **THEN** its source gain is connected both to the destination and to the effect's convolver, and the convolver's output reaches the destination through a gain of `wetDryMix / 100`
 
 ### Requirement: the impulse response follows the I3DL2 fields
-The convolver's impulse response SHALL be stereo, with no normalization by the node, and generated from the effect: early reflections starting `reflectionsDelay` after the input, at gain `reflections · room` (millibels converted to amplitude, `10^(mB / 2000)`); a late tail starting `reverbDelay` after them, at gain `reverb · room`, its energy decaying by 60 dB over `decayTime` below `hfReference` and over `decayTime · decayHFRatio` above it, the part above `hfReference` scaled by `roomHF`. `density` SHALL set how many early reflections there are and `diffusion` how dense the tail is. The energy of each part SHALL equal the square of its gain (the tail's before `roomHF`), so a noise-like input comes out of each part at that gain. The response SHALL be regenerated when one of these fields changes and SHALL NOT be when only `wetDryMix` changes. `roomRolloffFactor` is not used.
+The convolver's impulse response SHALL be stereo, not normalized by the node, and made of early reflections starting `reflectionsDelay` after the input, at gain `reflections · room`, and a late tail starting `reverbDelay` after them, at gain `reverb · room`, whose energy decays by 60 dB over `decayTime` below `hfReference` and over `decayTime · decayHFRatio` above it, the part above `hfReference` scaled by `roomHF`. Millibels SHALL be converted to amplitude as `10^(mB / 2000)`.
 
 #### Scenario: Tail decay
 - **WHEN** the impulse response of a `Reverb` is generated
 - **THEN** it is silent before `reflectionsDelay`, its late tail starts after `reflectionsDelay + reverbDelay`, and the energy below `hfReference` falls by 60 dB over `decayTime`
 
+#### Scenario: High frequencies
+- **WHEN** `decayHFRatio` is 0.5
+- **THEN** the energy of the tail above `hfReference` falls by 60 dB over half of `decayTime`
+
+### Requirement: the energy and density of the impulse response
+The energy of each part of the impulse response SHALL equal the square of its gain (the tail's before `roomHF`), so a noise-like input comes out of each part at that gain. `density` SHALL set how many early reflections there are and `diffusion` how dense the tail is. `roomRolloffFactor` SHALL NOT affect the response.
+
+#### Scenario: Energy of the parts
+- **WHEN** the impulse response of a `Reverb` is generated
+- **THEN** the energy of its early reflections is the square of `reflections · room` and that of its tail, before `roomHF`, the square of `reverb · room`, both as amplitudes
+
+#### Scenario: Density
+- **WHEN** two responses differ only by `density`, one at its minimum and one at its maximum
+- **THEN** the one at the maximum has more early reflections
+
+### Requirement: the impulse response is regenerated when its fields change
+The impulse response SHALL be regenerated when one of the fields it is generated from changes, and SHALL NOT be when only `wetDryMix` changes.
+
 #### Scenario: Parameter changed at runtime
 - **WHEN** `decayTime` of a bound `Reverb` changes and the Manager updates
 - **THEN** the convolver gets a response generated from the new value
+
+#### Scenario: Only the mix changes
+- **WHEN** only `wetDryMix` of a bound `Reverb` changes and the Manager updates
+- **THEN** the convolver keeps its response
 
 ### Requirement: one Reverb on several channels
 A `Reverb` added to several channels SHALL feed all of them into its one convolver. Removing it from one channel SHALL disconnect only that channel's send; the tail already in the convolver SHALL go on. The convolver SHALL be kept until `retainTime`, the duration of its impulse response (`reflectionsDelay + reverbDelay + decayTime · max(1, decayHFRatio)`), after the last channel is removed.
@@ -42,11 +64,19 @@ On WebAudio the output of every `Reverb` SHALL go to the destination through one
 - **THEN** the effects gain is `0`
 
 ### Requirement: the first channel on a new Reverb is reverberated from its start
-On WebAudio the buffers of a source SHALL NOT start playing before the effects bound to its channel in the same `Manager.update` are set up: `Driver.playSource` SHALL only mark the source started, and its buffers SHALL be started by `Driver.update()` at the end of that `Manager.update`, chained in queue order. A `Reverb` acquired for a channel SHALL therefore have its convolver, with its impulse response, connected to the channel's send before the channel's first sample is played, however short the channel and however long the response takes to generate.
+On WebAudio the buffers of a source SHALL NOT start playing before the effects bound to its channel in the same `Manager.update` are set up: `Driver.playSource` SHALL only mark the source started, and `Driver.update()` at the end of that `Manager.update` SHALL start its buffers, chained in queue order.
 
 #### Scenario: Short channel on a new Reverb
 - **WHEN** a 30 ms channel with a newly created `Reverb` is played and the Manager updates
 - **THEN** its buffer source nodes are started only once their output reaches the effect's convolver, which already has its response
+
+#### Scenario: Slow response
+- **WHEN** a channel is played on a newly acquired `Reverb` whose impulse response takes longer to generate than the channel lasts
+- **THEN** the convolver, with its response, is connected to the channel's send before the channel's first sample is played
+
+#### Scenario: Several queued buffers
+- **WHEN** a source has several buffers queued when `Driver.update()` starts it
+- **THEN** they are started one after the other, in queue order
 
 ### Requirement: impulse responses are reused
 Generated impulse responses SHALL be kept by the WebAudio reverb driver in a bounded cache keyed by the fields the response depends on and the sample rate. A `Reverb` whose fields match a cached response, a new one or one acquired again after its retention ended, SHALL use that response without generating it again.

@@ -13,15 +13,33 @@ A stereo pan for a sound channel, `hxd.snd.effect.Pan`, with the same levels on 
 - **THEN** the channel goes on playing with the new pan
 
 ### Requirement: the same equal-power law on every driver
-The levels SHALL follow the equal-power law of WebAudio `StereoPannerNode`. A mono clip gets `L = in · cos((value + 1) · π/4)`, `R = in · sin((value + 1) · π/4)`; a stereo clip with `value <= 0` gets `L = inL + inR · cos((value + 1) · π/2)`, `R = inR · sin((value + 1) · π/2)`, and with `value > 0` `L = inL · cos(value · π/2)`, `R = inR + inL · sin(value · π/2)`. WebAudio SHALL use a `StereoPannerNode`. Every other driver SHALL receive the panned channel as stereo buffers of `Manager.PAN_BUFFER_SAMPLE_COUNT` frames mixed by `Pan.mix` with this law, `Manager.PAN_BUFFER_QUEUE_LENGTH` of them queued; a buffer SHALL ramp the pan linearly from the value its predecessor ended with to the current one. With hlopenal the source SHALL play them with `AL_SOFT_direct_channels`, so OpenAL adds no panning of its own. The mixed buffers SHALL be 32-bit float where the driver takes float (hlopenal, the emulator under JS), so a stereo clip panned to a side keeps the sum of its channels (up to twice full scale) until the source gain applies; elsewhere they are in the sound's target format and clip at full scale.
+The levels SHALL follow the equal-power law of WebAudio `StereoPannerNode`. A mono clip gets `L = in · cos((value + 1) · π/4)`, `R = in · sin((value + 1) · π/4)`; a stereo clip with `value <= 0` gets `L = inL + inR · cos((value + 1) · π/2)`, `R = inR · sin((value + 1) · π/2)`, and with `value > 0` `L = inL · cos(value · π/2)`, `R = inR + inL · sin(value · π/2)`. WebAudio SHALL use a `StereoPannerNode`.
 
 #### Scenario: Mixed levels match StereoPannerNode
 - **WHEN** a mono or stereo frame is mixed by `Pan.mix` for a value in `[-1, 1]`
 - **THEN** the left and right levels equal those of the `StereoPannerNode` law
 
+### Requirement: drivers other than WebAudio play pre-mixed stereo buffers
+Every driver other than WebAudio SHALL receive the panned channel as stereo buffers of `Manager.PAN_BUFFER_SAMPLE_COUNT` frames mixed by `Pan.mix` with the equal-power law, `Manager.PAN_BUFFER_QUEUE_LENGTH` of them queued; a buffer SHALL ramp the pan linearly from the value its predecessor ended with to the current one. With hlopenal the source SHALL play them with `AL_SOFT_direct_channels`, so OpenAL adds no panning of its own.
+
 #### Scenario: A change ramps over the next buffer
 - **WHEN** `value` goes from `a` to `b` on a channel mixed by the Manager
 - **THEN** the next buffer starts at `a` and ends at `b`
+
+#### Scenario: hlopenal adds no panning
+- **WHEN** a panned channel plays on hlopenal
+- **THEN** its source plays with `AL_SOFT_direct_channels` enabled
+
+### Requirement: pre-mixed buffers are float where the driver takes float
+The buffers mixed by `Pan.mix` SHALL be 32-bit float where the driver takes float (hlopenal, the emulator under JS), so a stereo clip panned to a side keeps the sum of its channels (up to twice full scale) until the source gain applies; elsewhere they SHALL be in the sound's target format and clip at full scale.
+
+#### Scenario: Stereo clip panned to a side on hlopenal
+- **WHEN** a full-scale stereo frame (1, 1) is panned to `-1` on hlopenal
+- **THEN** the mixed buffer holds 2.0 on the left and 0 on the right, before the source gain
+
+#### Scenario: Driver without float buffers
+- **WHEN** the same frame is panned to `-1` on a driver that does not take float
+- **THEN** the left sample is clipped at full scale
 
 ### Requirement: adding or removing a Pan on a playing channel
 When a `Pan` is added to or removed from a playing channel on a driver other than WebAudio, the Manager SHALL rebind the channel's source at its current position, from its plain buffers to mixed ones or back.

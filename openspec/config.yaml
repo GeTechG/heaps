@@ -4,3 +4,31 @@ context: |
   heaps: the Heaps game engine, maintained as an independent fork of HeapsIO/heaps. Its own rules
   live in AGENTS.md; its own specs live in openspec/specs. Consumers pin it by commit.
   Every commit is either code or infrastructure, never both (see openspec/specs/commit-kinds).
+
+# Per-artifact rules — injected only when that artifact is created.
+rules:
+  specs:
+    - A requirement's text is at most 500 characters and states one behaviour with SHALL or MUST; details,
+      examples and edge cases go into its scenarios, or into separate requirements.
+    - Scenarios are `####` headings with WHEN/THEN bullets (GIVEN optional); every requirement has at least one.
+    - A spec states only observable behaviour, never how it is implemented.
+    - A MODIFIED requirement copies the whole requirement, every scenario included, and then changes it.
+    - A REMOVED requirement has a **Reason** and a **Migration**.
+    - A new capability's Purpose is at least 50 characters and never `TBD`.
+  tasks:
+    - Every task group carries its own tests and docs; every task names how it is checked (a test, a command,
+      the check of AGENTS.md *Checks*).
+    - Steps that follow the tasks (handing the issue on, a consumer's bump) go under `## Workflow follow-up`
+      as plain bullets, not checkboxes.
+    - A step only a human can do is written `- [ ] N.M [human] …` and stays a checkbox; agents never tick it.
+
+# Per-operation guidance — injected only into apply / archive. Points at AGENTS.md, never restates it.
+operations:
+  apply:
+    guidance:
+      - Follow AGENTS.md *Workflow*, steps 2 and 3, and run AGENTS.md *Checks* before pushing.
+      - Leave `[human]` tasks unticked; AGENTS.md *Workflow* step 4 says what to do with them.
+  archive:
+    guidance:
+      - Follow AGENTS.md *Workflow*, step 3: the archive is the last commit of the change's own branch.
+      - Give a new capability's main spec a real Purpose; `bash openspec/check.sh` must pass after archiving.
