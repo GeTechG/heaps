@@ -145,6 +145,7 @@ class Window {
 		element.addEventListener("touchstart", onTouchStart);
 		element.addEventListener("touchmove", onTouchMove);
 		element.addEventListener("touchend", onTouchEnd);
+		element.addEventListener("touchcancel", onTouchEnd);
 		element.addEventListener("keydown", onKeyDown);
 		element.addEventListener("keyup", onKeyUp);
 		element.addEventListener("keypress", onKeyPress);
@@ -226,6 +227,7 @@ class Window {
 		element.removeEventListener("touchstart", onTouchStart);
 		element.removeEventListener("touchmove", onTouchMove);
 		element.removeEventListener("touchend", onTouchEnd);
+		element.removeEventListener("touchcancel", onTouchEnd);
 		element.removeEventListener("keydown", onKeyDown);
 		element.removeEventListener("keyup", onKeyUp);
 		element.removeEventListener("keypress", onKeyPress);
