@@ -553,16 +553,14 @@ class Window {
 			@:privateAccess hxd.Pad.onEvent( e );
 		case KeyDown:
 			eh = new Event(EKeyDown, curMouseX, curMouseY);
-			if( e.keyCode & (1 << 30) != 0 ) e.keyCode = (e.keyCode & ((1 << 30) - 1)) + 1000;
-			eh.keyCode = CODEMAP[e.keyCode];
+			eh.keyCode = sdlKeyCode(e.keyCode, e.scanCode);
 			if( eh.keyCode & (K.LOC_LEFT | K.LOC_RIGHT) != 0 ) {
 				e.keyCode = eh.keyCode & 0xFF;
 				onEvent(e);
 			}
 		case KeyUp:
 			eh = new Event(EKeyUp, curMouseX, curMouseY);
-			if( e.keyCode & (1 << 30) != 0 ) e.keyCode = (e.keyCode & ((1 << 30) - 1)) + 1000;
-			eh.keyCode = CODEMAP[e.keyCode];
+			eh.keyCode = sdlKeyCode(e.keyCode, e.scanCode);
 			if( eh.keyCode & (K.LOC_LEFT | K.LOC_RIGHT) != 0 ) {
 				e.keyCode = eh.keyCode & 0xFF;
 				onEvent(e);
@@ -704,6 +702,40 @@ class Window {
 			close();
 		return ret;
 	}
+
+	#if hlsdl
+	// the hxd.Key of an SDL keycode; a character the map does not know is the key of its position (scanCode)
+	static function sdlKeyCode( keyCode : Int, scanCode : Int ) : Int {
+		if( keyCode & (1 << 30) != 0 )
+			return CODEMAP[(keyCode & ((1 << 30) - 1)) + 1000];
+		if( keyCode >= 0 && keyCode < 1000 && (keyCode < 128 || CODEMAP[keyCode] != keyCode) )
+			return CODEMAP[keyCode];
+		// a character of another layout: its code point must not land on 1000 + scancode (U+0440 is KP_ENTER's 1088)
+		if( scanCode >= 0 && scanCode < SCANCODE_KEYS.length && SCANCODE_KEYS[scanCode] != 0 )
+			return SCANCODE_KEYS[scanCode];
+		return keyCode < 1000 ? CODEMAP[keyCode] : keyCode;
+	}
+
+	// the hxd.Key of each SDL scancode of the US main block, 0 where none
+	static var SCANCODE_KEYS = {
+		var keys = [for( i in 0...57 ) 0];
+		for( i in 0...26 ) keys[4 + i] = K.A + i;
+		for( i in 0...9 ) keys[30 + i] = K.NUMBER_1 + i;
+		keys[39] = K.NUMBER_0;
+		keys[45] = K.QWERTY_MINUS;
+		keys[46] = K.QWERTY_EQUALS;
+		keys[47] = K.QWERTY_BRACKET_LEFT;
+		keys[48] = K.QWERTY_BRACKET_RIGHT;
+		keys[49] = K.QWERTY_BACKSLASH;
+		keys[51] = K.QWERTY_SEMICOLON;
+		keys[52] = K.QWERTY_QUOTE;
+		keys[53] = K.QWERTY_TILDE;
+		keys[54] = K.QWERTY_COMMA;
+		keys[55] = K.QWERTY_PERIOD;
+		keys[56] = K.QWERTY_SLASH;
+		keys;
+	};
+	#end
 
 	static function initChars() : Void {
 
