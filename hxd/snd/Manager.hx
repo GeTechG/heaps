@@ -304,7 +304,11 @@ class Manager {
 				continue;
 			}
 
-			c.position += Math.max(now - c.lastStamp, 0.0);
+			// advance at the pitch a source would play the channel at: its own Pitch, else its group's
+			var pitch = c.getEffect(hxd.snd.effect.Pitch);
+			if (pitch == null) pitch = c.channelGroup.getEffect(hxd.snd.effect.Pitch);
+			var rate = pitch == null ? 1.0 : Math.max(pitch.value, 0.0);
+			c.position += Math.max(now - c.lastStamp, 0.0) * rate;
 			c.lastStamp = now;
 
 			var next = c.next; // save next, since we might release this channel
