@@ -40,6 +40,8 @@ class SearchMap {
 	public function set(id: Int, s: SearchMap) {
 		if(nexts != null) {
 			nexts.set(id, s);
+			if(id == firstId)
+				firstNext = s;
 			return;
 		}
 		if(firstId < 0) {
@@ -58,13 +60,30 @@ class SearchMap {
 	}
 
 	inline public function get(id: Int) {
-		if(firstId < 0)
-			return null;
 		if(id == firstId)
 			return firstNext;
 		if(nexts == null)
 			return null;
 		return nexts.get(id);
+	}
+
+	public function remove(id: Int) {
+		if(nexts != null)
+			nexts.remove(id);
+		if(id == firstId) {
+			firstId = -1;
+			firstNext = null;
+		}
+	}
+
+	public function keys() : Array<Int> {
+		if(nexts != null)
+			return [for(k in nexts.keys()) k];
+		return firstId < 0 ? [] : [firstId];
+	}
+
+	public function isEmpty() {
+		return linked == null && (nexts == null ? firstId < 0 : !nexts.iterator().hasNext());
 	}
 }
 
@@ -102,6 +121,9 @@ class Cache {
 		var s = createLinkShader(key, vars, vertexOutputName);
 		shader = std.Type.createEmptyInstance(Shader);
 		@:privateAccess shader.shader = s;
+		// createEmptyInstance skips the field initializers: null on dynamic targets such as eval
+		@:privateAccess shader.priority = 0;
+		@:privateAccess shader.constBits = 0;
 		linkShaders.set(key, shader);
 		@:privateAccess shader.updateConstantsFinal(null);
 		return shader;
@@ -235,6 +257,106 @@ class Cache {
 		if( c.linked == null )
 			c.linked = compileRuntimeShader(shaders, mode);
 		return c.linked;
+	}
+
+	/**
+		Forgets every runtime shader linked from an instance of `shader`, and every batch shader made from one of them,
+		so that `shader` can be dropped without the cache keeping what was compiled from it.
+		Then calls `driver.disposeShader` once for each runtime shader id that no shader left in the cache carries;
+		without `driver`, the current engine's driver is used, if there is an engine.
+		The instances are those `shader` holds now: call it before `SharedShader.reloadShader`, which forgets them.
+		Returns the removed runtime shaders.
+	**/
+	public function evict( shader : SharedShader, ?driver : h3d.impl.Driver ) : Array<RuntimeShader> {
+		#if heaps_mt_hxsl_cache
+		linkMutex.acquire();
+		#end
+		var removed : Array<RuntimeShader> = [];
+		var kept : Array<RuntimeShader> = [];
+		var pending = [shader];
+		while( pending.length > 0 ) {
+			var ids = new Map<Int,Bool>();
+			for( s in pending )
+				for( i in @:privateAccess s.instanceCache )
+					ids.set(i.id, true);
+			pending = [];
+			var start = removed.length;
+			kept = [];
+			pruneLinks(linkCache, ids, removed, kept);
+			for( i in start...removed.length ) {
+				var rt = removed[i];
+				var b = batchShaders.get(rt);
+				if( b != null ) {
+					batchShaders.remove(rt);
+					pending.push(b.shader);
+				}
+				for( m in batchShadersParams ) {
+					var b = m.get(rt);
+					if( b != null ) {
+						m.remove(rt);
+						pending.push(b.shader);
+					}
+				}
+			}
+		}
+		var keptBySign = new Map<String,RuntimeShader>();
+		for( rt in kept )
+			if( !keptBySign.exists(rt.signature) )
+				keptBySign.set(rt.signature, rt);
+		for( rt in removed )
+			if( byID.get(rt.signature) == rt ) {
+				var k = keptBySign.get(rt.signature);
+				if( k != null )
+					byID.set(rt.signature, k);
+				else
+					byID.remove(rt.signature);
+			}
+		var keptIds = new Map<Int,Bool>();
+		for( rt in kept )
+			keptIds.set(rt.id, true);
+		for( rt in byID )
+			keptIds.set(rt.id, true);
+		var dispose = [];
+		for( rt in removed )
+			if( !keptIds.exists(rt.id) ) {
+				keptIds.set(rt.id, true);
+				dispose.push(rt);
+			}
+		#if heaps_mt_hxsl_cache
+		linkMutex.release();
+		#end
+		#if !macro
+		if( driver == null ) {
+			var engine = h3d.Engine.getCurrent();
+			if( engine != null )
+				driver = engine.driver;
+		}
+		#end
+		if( driver != null )
+			for( rt in dispose )
+				driver.disposeShader(rt);
+		return removed;
+	}
+
+	function pruneLinks( c : SearchMap, ids : Map<Int,Bool>, removed : Array<RuntimeShader>, kept : Array<RuntimeShader> ) {
+		if( c.linked != null )
+			kept.push(c.linked);
+		for( id in c.keys() ) {
+			var n = c.get(id);
+			if( ids.exists(id) ) {
+				collectLinks(n, removed);
+				c.remove(id);
+			} else if( pruneLinks(n, ids, removed, kept) )
+				c.remove(id);
+		}
+		return c.isEmpty();
+	}
+
+	function collectLinks( c : SearchMap, out : Array<RuntimeShader> ) {
+		if( c.linked != null )
+			out.push(c.linked);
+		for( id in c.keys() )
+			collectLinks(c.get(id), out);
 	}
 
 	function compileRuntimeShader( shaders : hxsl.ShaderList, mode : LinkMode ) {

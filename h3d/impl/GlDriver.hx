@@ -638,6 +638,29 @@ class GlDriver extends Driver {
 		return true;
 	}
 
+	#if hlsdl
+	// sdl.hdll exports gl_delete_program, sdl.GL does not bind it
+	@:hlNative("sdl", "gl_delete_program") static function sdlDeleteProgram( p : Program ) : Void {}
+	#end
+
+	override function disposeShader( shader : hxsl.RuntimeShader ) {
+		#if (js || hlsdl)
+		var p = programs.get(shader.id);
+		if( p == null )
+			return;
+		programs.remove(shader.id);
+		if( curShader == p ) {
+			curShader = null;
+			gl.useProgram(null);
+		}
+		#if hlsdl
+		sdlDeleteProgram(p.p);
+		#else
+		gl.deleteProgram(p.p);
+		#end
+		#end
+	}
+
 	function setProgram( p : CompiledProgram ) {
 		gl.useProgram(p.p);
 

@@ -248,6 +248,13 @@ class Driver {
 		return false;
 	}
 
+	/**
+		Releases what the driver compiled for `shader.id`. Called by `hxsl.Cache.evict` once no cached shader carries that id.
+		Selecting a shader with that id afterwards compiles it again.
+	**/
+	public function disposeShader( shader : hxsl.RuntimeShader ) {
+	}
+
 	public function selectMaterial( pass : h3d.mat.Pass ) {
 	}
 
