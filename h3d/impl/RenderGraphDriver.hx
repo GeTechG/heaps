@@ -64,6 +64,10 @@ class RenderGraphDriver extends Driver {
 		return d.selectShader(shader);
 	}
 
+	override function disposeShader( shader : hxsl.RuntimeShader ) {
+		d.disposeShader(shader);
+	}
+
 	override function getNativeShaderCode( shader ) {
 		return d.getNativeShaderCode(shader);
 	}
