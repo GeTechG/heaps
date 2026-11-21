@@ -17,12 +17,12 @@ Allow external Haxe macros to check parsed HXSL blocks and obtain shader data th
 
 #### Scenario: An imported shader declares a Haxe enum
 
-- **WHEN** an external macro checks a block importing a shader with a parameter typed as a supported Haxe enum
-- **THEN** the checked data retains the enum type and its constructors
+- **WHEN** an external macro checks a block importing a shader with a global typed as a supported Haxe enum and uses one of its constructors
+- **THEN** the checker type-checks the constructor against the enum and returns shader data with the enum represented as an integer
 
 ### Requirement: Report ordinary shader import errors
 
-`hxsl.Macros.checkShader` SHALL preserve the diagnostics from standard shader import resolution.
+`hxsl.Macros.checkShader` SHALL report failed imports as positioned Haxe macro errors with the messages provided by standard shader import resolution.
 
 #### Scenario: Import resolves to a non-shader type
 
