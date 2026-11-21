@@ -39,19 +39,25 @@ class HxslMacroCheckTest {
 		if( !Lambda.exists(decoded.vars, v -> v.name == "mode" && v.type.match(TInt)) )
 			throw "Imported enum global missing from the resource";
 
-		var nonShader = parser.parseExpr(macro { @:import String; });
-		var expectedPos = switch( nonShader.expr ) {
-		case EBlock([{ expr: ECall(_, [path]) }]): Context.getPosInfos(path.pos);
-		default: throw "Expected an import expression";
-		};
-		try {
-			hxsl.Macros.checkShader("NonShader", nonShader);
-			throw "Non-shader import succeeded";
-		} catch( error : haxe.macro.Expr.Error ) {
-			var pos = Context.getPosInfos(error.pos);
-			if( error.message != "String is not a shader" || pos.file != expectedPos.file ||
-				pos.min != expectedPos.min || pos.max != expectedPos.max )
-				throw error;
+		var nonShaders = [
+			macro { @:import String; },
+			macro { @:extends String; },
+		];
+		for( source in nonShaders ) {
+			var nonShader = parser.parseExpr(source);
+			var expectedPos = switch( nonShader.expr ) {
+			case EBlock([{ expr: ECall(_, [path]) }]): Context.getPosInfos(path.pos);
+			default: throw "Expected a shader directive";
+			};
+			try {
+				hxsl.Macros.checkShader("NonShader", nonShader);
+				throw "Non-shader directive succeeded";
+			} catch( error : haxe.macro.Expr.Error ) {
+				var pos = Context.getPosInfos(error.pos);
+				if( error.message != "String is not a shader" || pos.file != expectedPos.file ||
+					pos.min != expectedPos.min || pos.max != expectedPos.max )
+					throw error;
+			}
 		}
 
 		var missing = parser.parseExpr(macro { @:import h3d.shader.HxslMacroCheckMissingShader; });

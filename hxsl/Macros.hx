@@ -609,8 +609,8 @@ class Macros {
 	/**
 		Check a parsed HXSL block in the current Haxe macro context and resolve
 		its imports as in a shader class. Use `makeParser()` to parse Haxe
-		expressions with support for Haxe enum types. Failed imports are reported
-		as positioned Haxe macro errors.
+		expressions with support for Haxe enum types. Failed imports and
+		extensions of non-shader types produce positioned Haxe macro errors.
 	**/
 	public static function checkShader( name : String, shader : Ast.Expr ) : ShaderData {
 		try {
