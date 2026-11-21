@@ -30,5 +30,5 @@ operations:
       - Leave `[human]` tasks unticked; AGENTS.md *Workflow* step 4 says what to do with them.
   archive:
     guidance:
-      - Follow AGENTS.md *Workflow*, step 3: the archive is the last commit of the change's own branch.
+      - "Follow AGENTS.md *Workflow*, step 3: the archive is the last commit of the change's own branch."
       - Give a new capability's main spec a real Purpose; `bash openspec/check.sh` must pass after archiving.
