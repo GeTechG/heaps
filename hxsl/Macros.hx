@@ -597,6 +597,29 @@ class Macros {
 		return null;
 	}
 
+	static function makeChecker( ?enumTypes : Map<String,String> ) {
+		var check = new Checker();
+		check.loadShader = path -> loadShader(path, enumTypes);
+		check.warning = function(msg,pos) {
+			Context.warning(msg, pos);
+		};
+		return check;
+	}
+
+	/**
+		Check a parsed HXSL block in the current Haxe macro context and resolve
+		its imports as in a shader class. Use `makeParser()` to parse Haxe
+		expressions with support for Haxe enum types. Failed imports are reported
+		as positioned Haxe macro errors.
+	**/
+	public static function checkShader( name : String, shader : Ast.Expr ) : ShaderData {
+		try {
+			return makeChecker().check(name, shader);
+		} catch( e : Ast.Error ) {
+			throw new haxe.macro.Expr.Error(e.msg, e.pos);
+		}
+	}
+
 	public static function buildShader() {
 		var fields = Context.getBuildFields();
 		for( f in fields )
@@ -632,11 +655,8 @@ class Macros {
 							supFields.remove("clone");
 							csup = tsup.superClass;
 						} while( true);
-						var className = Std.string(cl);						var check = new Checker();
-						check.loadShader = path -> loadShader(path, enumTypes);
-						check.warning = function(msg,pos) {
-							haxe.macro.Context.warning(msg, pos);
-						};
+						var className = Std.string(cl);
+						var check = makeChecker(enumTypes);
 						var shader = check.check(className, shader);
 						//Printer.check(shader);
 						var str = Context.defined("display") ? "" : Serializer.run(shader);
